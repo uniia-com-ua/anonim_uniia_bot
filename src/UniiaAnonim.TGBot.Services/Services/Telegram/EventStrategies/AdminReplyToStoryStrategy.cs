@@ -8,6 +8,7 @@ using UniiaAnonim.TGBot.Application.Interfaces.StoryAuthor;
 using UniiaAnonim.TGBot.Application.Interfaces.Telegram;
 using UniiaAnonim.TGBot.Domain.Interfaces.Repositories;
 using UniiaAnonim.TGBot.Shared.Consts;
+using UniiaAnonim.TGBot.Shared.Enums;
 using UniiaAnonim.TGBot.Shared.Resources;
 
 namespace UniiaAnonim.TGBot.Application.Services.Telegram.EventStrategies;
@@ -67,11 +68,11 @@ public sealed partial class AdminReplyToStoryStrategy(
             return;
         }
 
-        if (!await storyAuthorService.ExistsAsync(storyId, ct))
+        if (await storyAuthorService.IsInStatusAsync(storyId, StoryStatus.Published, ct))
         {
             await botClient.SendMessage(
                 chatId: message.Chat.Id,
-                text: localizer["str0016"],
+                text: localizer["str0017"],
                 parseMode: ParseMode.Html,
                 replyParameters: new ReplyParameters { MessageId = message.MessageId },
                 cancellationToken: ct);
@@ -79,11 +80,11 @@ public sealed partial class AdminReplyToStoryStrategy(
             return;
         }
 
-        if (await storyAuthorService.IsPublishedAsync(storyId, ct))
+        if (await storyAuthorService.IsInStatusAsync(storyId, StoryStatus.Pending, ct))
         {
             await botClient.SendMessage(
                 chatId: message.Chat.Id,
-                text: localizer["str0017"],
+                text: localizer["str0016"],
                 parseMode: ParseMode.Html,
                 replyParameters: new ReplyParameters { MessageId = message.MessageId },
                 cancellationToken: ct);

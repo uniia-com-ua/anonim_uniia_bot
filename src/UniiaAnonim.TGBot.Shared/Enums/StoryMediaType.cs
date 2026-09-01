@@ -4,4 +4,5 @@ public enum StoryMediaType : byte
 {
     Photo,
     Video,
+    Document,
 }

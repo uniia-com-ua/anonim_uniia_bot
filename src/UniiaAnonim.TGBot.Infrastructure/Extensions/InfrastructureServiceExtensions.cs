@@ -126,7 +126,8 @@ public static class InfrastructureServiceExtensions
     {
         services
             .AddScoped<IStoryAuthorRepository, StoryAuthorRepository>()
-            .AddScoped<IChannelRepository, ChannelRepository>();
+            .AddScoped<IChannelRepository, ChannelRepository>()
+            .AddScoped<IAuthorAgreementRepository, AuthorAgreementRepository>();
 
         return services;
     }

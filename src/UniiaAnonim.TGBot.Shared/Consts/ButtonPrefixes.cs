@@ -12,6 +12,8 @@ public static class ButtonPrefixes
 
     public const string AdminRejectStoryPrefix = "admin_reject_";
 
+    public const string AcceptRulesPrefix = "accept_rules";
+
     public static string GetUserApproveStoryButtonPrefix(Guid storyId) => $"{UserApproveStoryPrefix}{storyId}";
 
     public static string GetUserRejectStoryButtonPrefix(Guid storyId) => $"{UserRejectStoryPrefix}{storyId}";

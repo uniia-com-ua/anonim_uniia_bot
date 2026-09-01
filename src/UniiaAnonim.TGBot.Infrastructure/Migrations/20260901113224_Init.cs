@@ -5,11 +5,24 @@
 namespace UniiaAnonim.TGBot.Infrastructure.Migrations;
 
 /// <inheritdoc />
-public partial class InitialMigration : Migration
+public partial class Init : Migration
 {
     /// <inheritdoc />
     protected override void Up(MigrationBuilder migrationBuilder)
     {
+        migrationBuilder.CreateTable(
+            name: "AuthorAgreement",
+            columns: table => new
+            {
+                Id = table.Column<Guid>(type: "uuid", nullable: false),
+                AuthorIdHash = table.Column<string>(type: "text", nullable: false),
+                HasAcceptedRules = table.Column<bool>(type: "boolean", nullable: false),
+            },
+            constraints: table =>
+            {
+                table.PrimaryKey("PK_AuthorAgreement", x => x.Id);
+            });
+
         migrationBuilder.CreateTable(
             name: "Channel",
             columns: table => new
@@ -30,7 +43,7 @@ public partial class InitialMigration : Migration
                 Id = table.Column<Guid>(type: "uuid", nullable: false),
                 AuthorId = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: false),
                 AuthorIdHash = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: false),
-                IsPublished = table.Column<bool>(type: "boolean", nullable: false),
+                Status = table.Column<byte>(type: "smallint", nullable: false),
                 ChannelMessageId = table.Column<int>(type: "integer", nullable: false),
             },
             constraints: table =>
@@ -58,6 +71,12 @@ public partial class InitialMigration : Migration
             });
 
         migrationBuilder.CreateIndex(
+            name: "IX_AuthorAgreement_AuthorIdHash",
+            table: "AuthorAgreement",
+            column: "AuthorIdHash",
+            unique: true);
+
+        migrationBuilder.CreateIndex(
             name: "IX_Channel_ChannelId",
             table: "Channel",
             column: "ChannelId",
@@ -77,6 +96,9 @@ public partial class InitialMigration : Migration
     /// <inheritdoc />
     protected override void Down(MigrationBuilder migrationBuilder)
     {
+        migrationBuilder.DropTable(
+            name: "AuthorAgreement");
+
         migrationBuilder.DropTable(
             name: "Channel");
 

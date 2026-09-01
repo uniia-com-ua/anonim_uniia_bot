@@ -1,5 +1,6 @@
 ﻿using UniiaAnonim.TGBot.Domain.Models;
 using UniiaAnonim.TGBot.Shared.Dtos.StoryAuthor;
+using UniiaAnonim.TGBot.Shared.Enums;
 using UniiaAnonim.TGBot.Shared.Exceptions;
 
 namespace UniiaAnonim.TGBot.Domain.Interfaces.Repositories;
@@ -11,14 +12,14 @@ public interface IStoryAuthorRepository
     : IGenericRepository<StoryAuthor>
 {
     /// <summary>
-    /// Asynchronously checks whether an unpublished entity with the specified author identifier hash exists in the database.
+    /// Asynchronously checks whether the specified user has an active (not published) story in the database.
     /// </summary>
-    /// <param name="authorIdHash">The unique author identifier hash to check.</param>
+    /// <param name="authorIdHash">The unique hash of the author to check.</param>
     /// <param name="ct">A token to monitor for cancellation requests.</param>
     /// <returns>
-    /// <see langword="true"/> if at least one unpublished entity exists for the author hash; otherwise, <see langword="false"/>.
+    /// <see langword="true"/> if an active story exists for the author; otherwise, <see langword="false"/>.
     /// </returns>
-    Task<bool> ExistsAsync(string authorIdHash, CancellationToken ct = default);
+    Task<bool> HasUserActiveStoryAsync(string authorIdHash, CancellationToken ct = default);
 
     /// <summary>
     /// Asynchronously checks whether an entity with the specified story identifier exists in the database.
@@ -42,20 +43,31 @@ public interface IStoryAuthorRepository
     Task<int> GetActualStoryMessageIdAsync(string authorIdHash, CancellationToken ct = default);
 
     /// <summary>
-    /// Asynchronously marks a story author record as published based on its unique identifier.
+    /// Asynchronously checks if the story with the specified identifier is in the given status.
     /// </summary>
-    /// <param name="id">The unique identifier of the story record to update.</param>
+    /// <param name="storyId">The unique identifier of the story record.</param>
+    /// <param name="status">The story status to check against.</param>
     /// <param name="ct">A token to monitor for cancellation requests.</param>
-    /// <returns>A task that represents the asynchronous update operation.</returns>
-    Task MarkAsPublishedAsync(Guid id, CancellationToken ct = default);
+    /// <returns><see langword="true"/> if the story is in the specified status; otherwise, <see langword="false"/>.</returns>
+    Task<bool> IsInStatusAsync(Guid storyId, StoryStatus status, CancellationToken ct = default);
 
     /// <summary>
-    /// Asynchronously checks if a story author record is marked as published.
+    /// Asynchronously checks if the story for the specified author identifier hash is in the given status.
     /// </summary>
-    /// <param name="id">The unique identifier of the story record to check.</param>
+    /// <param name="authorIdHash">The hashed identifier of the author.</param>
+    /// <param name="status">The story status to check against.</param>
     /// <param name="ct">A token to monitor for cancellation requests.</param>
-    /// <returns><see langword="true"/> if the story is published; otherwise, <see langword="false"/>.</returns>
-    Task<bool> IsPublishedAsync(Guid id, CancellationToken ct = default);
+    /// <returns><see langword="true"/> if the author's story is in the specified status; otherwise, <see langword="false"/>.</returns>
+    Task<bool> IsInStatusAsync(string authorIdHash, StoryStatus status, CancellationToken ct = default);
+
+    /// <summary>
+    /// Asynchronously updates the status of the story with the specified identifier.
+    /// </summary>
+    /// <param name="storyId">The unique identifier of the story record.</param>
+    /// <param name="status">The new story status to set.</param>
+    /// <param name="ct">A token to monitor for cancellation requests.</param>
+    /// <returns>A task that represents the asynchronous update operation.</returns>
+    Task SetStatusAsync(Guid storyId, StoryStatus status, CancellationToken ct = default);
 
     /// <summary>
     /// Asynchronously assigns Telegram message identifiers to a story record based on its unique identifier.

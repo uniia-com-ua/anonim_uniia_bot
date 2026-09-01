@@ -15,9 +15,7 @@ public sealed class PhotoMediaStrategy(ITelegramBotClient client) : IMediaTypeSt
     private readonly ITelegramBotClient _client = client ?? throw new ArgumentNullException(nameof(client));
 
     /// <inheritdoc/>
-    public bool CanHandle(string contentType) =>
-        !string.IsNullOrEmpty(contentType) &&
-        contentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase);
+    public bool CanHandle(MessageType fileType) => fileType == MessageType.Photo;
 
     /// <inheritdoc/>
     public IAlbumInputMedia CreateAlbumMedia(InputFile file)

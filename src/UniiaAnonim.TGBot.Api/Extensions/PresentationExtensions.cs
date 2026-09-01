@@ -24,7 +24,6 @@ public static class PresentationExtensions
         services.AddProblemDetails();
 
         services.AddTransient<TelegramSecretTokenFilter>();
-        services.AddTransient<TelegramWebAppAuthFilter>();
 
         return services;
     }

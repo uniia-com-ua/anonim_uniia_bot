@@ -15,9 +15,7 @@ public sealed class VideoMediaStrategy(ITelegramBotClient client) : IMediaTypeSt
     private readonly ITelegramBotClient _client = client ?? throw new ArgumentNullException(nameof(client));
 
     /// <inheritdoc/>
-    public bool CanHandle(string contentType) =>
-        !string.IsNullOrEmpty(contentType) &&
-        contentType.StartsWith("video/", StringComparison.OrdinalIgnoreCase);
+    public bool CanHandle(MessageType fileType) => fileType == MessageType.Video;
 
     /// <inheritdoc/>
     public IAlbumInputMedia CreateAlbumMedia(InputFile file)

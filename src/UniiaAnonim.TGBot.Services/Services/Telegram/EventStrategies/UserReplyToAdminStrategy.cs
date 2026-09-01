@@ -31,7 +31,7 @@ public sealed class UserReplyToAdminStrategy(
         return msg is not null &&
                msg.Chat.Type == ChatType.Private &&
                msg.From is { IsBot: false } &&
-               await storyAuthorService.ExistsAsync(msg.From.Id, ct);
+               await storyAuthorService.HasUserActiveStoryAsync(msg.From.Id, ct);
     }
 
     /// <inheritdoc/>

@@ -30,12 +30,6 @@ public sealed class StoryDispatcherService(
     {
         ArgumentNullException.ThrowIfNull(dto);
 
-        if (await storyAuthorService.ExistsAsync(dto.TelegramId, ct))
-        {
-            await botClient.SendMessage(dto.TelegramId, localizer["str0003"], ParseMode.Html, cancellationToken: ct);
-            return;
-        }
-
         var adminChannel = await channelRepository.GetByTypeAsync(ChannelType.AdminChannel, ct);
 
         if (adminChannel == null)
@@ -49,14 +43,14 @@ public sealed class StoryDispatcherService(
 
         try
         {
-            var messageId = await deliveryService.DeliverToAdminAsync(
+            var messageIds = await deliveryService.DeliverToAdminAsync(
                 chatId: adminChannel.ChannelId,
                 text: localizer["str0004", storyId, dto.Story],
                 files: dto.Files,
                 keyboard: inlineKeyboard,
                 ct: ct);
 
-            await storyAuthorService.SetMessageIdAsync(storyId, messageId, ct);
+            await storyAuthorService.SetMessageIdAsync(storyId, messageIds, ct);
         }
         catch (StoryTooLongException)
         {

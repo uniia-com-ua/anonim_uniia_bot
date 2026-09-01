@@ -73,15 +73,18 @@ public static class ApplicationServiceExtensions
         services
             .AddScoped<IDefaultTelegramUpdateStrategy, DefaultUpdateStrategy>()
             .AddScoped<ITelegramUpdateStrategy, WelcomeStrategy>()
+            .AddScoped<ITelegramUpdateStrategy, EnsureRulesAcceptedStrategy>()
             .AddScoped<ITelegramUpdateStrategy, BotRegistrationStrategy>()
             .AddScoped<ITelegramUpdateStrategy, BotRemovalStrategy>()
+            .AddScoped<ITelegramUpdateStrategy, CreateNewStoryStrategy>()
             .AddScoped<ITelegramUpdateStrategy, AdminReplyToStoryStrategy>()
             .AddScoped<ITelegramUpdateStrategy, UserReplyToAdminStrategy>()
             .AddScoped<ITelegramUpdateStrategy, RejectStoryStrategy>()
             .AddScoped<ITelegramUpdateStrategy, PublishStoryStrategy>()
             .AddScoped<ITelegramUpdateStrategy, EditStoryCallbackStrategy>()
             .AddScoped<ITelegramUpdateStrategy, AdminSubmitEditedStoryStrategy>()
-            .AddScoped<ITelegramUpdateStrategy, AuthorReviewEditStrategy>();
+            .AddScoped<ITelegramUpdateStrategy, AuthorReviewEditStrategy>()
+            .AddScoped<ITelegramUpdateStrategy, AcceptRulesCallbackStrategy>();
 
         return services;
     }

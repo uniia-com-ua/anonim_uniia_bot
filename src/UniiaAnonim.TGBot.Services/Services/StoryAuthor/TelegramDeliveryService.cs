@@ -1,11 +1,11 @@
-﻿using Microsoft.AspNetCore.Http;
-using Telegram.Bot;
+﻿using Telegram.Bot;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
 using Telegram.Bot.Types.ReplyMarkups;
 using UniiaAnonim.TGBot.Application.Interfaces.StoryAuthor;
 using UniiaAnonim.TGBot.Application.Interfaces.Telegram;
 using UniiaAnonim.TGBot.Shared.Dtos.StoryAuthor;
+using UniiaAnonim.TGBot.Shared.Enums;
 using UniiaAnonim.TGBot.Shared.Exceptions;
 
 namespace UniiaAnonim.TGBot.Application.Services.StoryAuthor;
@@ -27,7 +27,7 @@ public sealed class TelegramDeliveryService(
     public async Task<TelegramMessageIds> DeliverToAdminAsync(
         long chatId,
         string text,
-        IReadOnlyList<IFormFile>? files,
+        IReadOnlyDictionary<string, StoryMediaType>? files,
         InlineKeyboardMarkup keyboard,
         CancellationToken ct)
     {
@@ -54,20 +54,9 @@ public sealed class TelegramDeliveryService(
             return new TelegramMessageIds(message.MessageId);
         }
 
-        var streamsToDispose = new List<Stream>(files.Count);
-        try
-        {
-            return files.Count == 1
-                ? await DeliverSingleFileAsync(chatId, text, files[0], keyboard, isLongText, streamsToDispose, ct)
-                : await DeliverMediaGroupAsync(chatId, text, files, keyboard, streamsToDispose, ct);
-        }
-        finally
-        {
-            foreach (var stream in streamsToDispose)
-            {
-                await stream.DisposeAsync();
-            }
-        }
+        return files.Count == 1
+                       ? await DeliverSingleFileAsync(chatId, text, files.First(), keyboard, isLongText, ct)
+                       : await DeliverMediaGroupAsync(chatId, text, files, keyboard, ct);
     }
 
     /// <summary>
@@ -76,36 +65,19 @@ public sealed class TelegramDeliveryService(
     private async Task<TelegramMessageIds> DeliverSingleFileAsync(
         long chatId,
         string text,
-        IFormFile file,
+        KeyValuePair<string, StoryMediaType> file,
         InlineKeyboardMarkup keyboard,
         bool isLongText,
-        List<Stream> streamsToDispose,
         CancellationToken ct)
     {
-        var stream = file.OpenReadStream();
+        var messageType = telegramMediaExtractor.GetMessageType(file);
+        var inputFile = telegramMediaExtractor.GetInputFile(file);
 
-        if (stream.CanSeek)
-        {
-            stream.Position = 0;
-        }
-
-        streamsToDispose.Add(stream);
-
-        string fileName = string.IsNullOrWhiteSpace(file.FileName) ? "media_file" : file.FileName;
-        var inputFile = InputFile.FromStream(stream, fileName);
-
-        var strategy = GetStrategy(file.ContentType);
+        var strategy = GetStrategy(messageType);
 
         if (isLongText)
         {
             var mediaMessage = await strategy.SendSingleAsync(chatId, inputFile, caption: null, keyboard: null, ct);
-
-            var mediaFiles = telegramMediaExtractor.ExtractMediaFiles(mediaMessage);
-
-            if (mediaFiles.Count == 0)
-            {
-                throw new FileNotFoundException("File is not found while trying to save message");
-            }
 
             var followUpMessage = await botClient.SendMessage(
                 chatId: chatId,
@@ -115,7 +87,7 @@ public sealed class TelegramDeliveryService(
                 replyParameters: new ReplyParameters { MessageId = mediaMessage.MessageId },
                 cancellationToken: ct);
 
-            return new TelegramMessageIds(followUpMessage.MessageId, mediaFiles);
+            return new TelegramMessageIds(followUpMessage.MessageId, new Dictionary<string, StoryMediaType>([file]));
         }
 
         var message = await strategy.SendSingleAsync(chatId, inputFile, text, keyboard, ct);
@@ -128,29 +100,17 @@ public sealed class TelegramDeliveryService(
     private async Task<TelegramMessageIds> DeliverMediaGroupAsync(
         long chatId,
         string text,
-        IReadOnlyList<IFormFile> files,
+        IReadOnlyDictionary<string, StoryMediaType> files,
         InlineKeyboardMarkup keyboard,
-        List<Stream> streamsToDispose,
         CancellationToken ct)
     {
         var mediaGroup = new List<IAlbumInputMedia>(files.Count);
 
-        for (int i = 0; i < files.Count; i++)
+        foreach (var kvp in files)
         {
-            var file = files[i];
-            var stream = file.OpenReadStream();
+            var inputFile = telegramMediaExtractor.GetInputFile(kvp);
 
-            if (stream.CanSeek)
-            {
-                stream.Position = 0;
-            }
-
-            streamsToDispose.Add(stream);
-
-            string fileName = string.IsNullOrWhiteSpace(file.FileName) ? $"media_file_{i}" : file.FileName;
-            var inputFile = InputFile.FromStream(stream, fileName);
-
-            var media = GetStrategy(file.ContentType).CreateAlbumMedia(inputFile);
+            var media = GetStrategy(telegramMediaExtractor.GetMessageType(kvp)).CreateAlbumMedia(inputFile);
 
             mediaGroup.Add(media);
         }
@@ -174,7 +134,7 @@ public sealed class TelegramDeliveryService(
     /// <summary>
     /// Resolves the appropriate media handling strategy based on the file's content type.
     /// </summary>
-    private IMediaTypeStrategy GetStrategy(string contentType)
+    private IMediaTypeStrategy GetStrategy(MessageType contentType)
     {
         var strategy = mediaStrategies.FirstOrDefault(s => s.CanHandle(contentType));
 

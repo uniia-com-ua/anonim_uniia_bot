@@ -1,11 +1,10 @@
 ﻿using Microsoft.Extensions.Localization;
-using Microsoft.Extensions.Options;
 using Telegram.Bot;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
 using Telegram.Bot.Types.ReplyMarkups;
 using UniiaAnonim.TGBot.Application.Interfaces.Telegram;
-using UniiaAnonim.TGBot.Shared.Configuration.Telegram;
+using UniiaAnonim.TGBot.Shared.Consts;
 using UniiaAnonim.TGBot.Shared.Resources;
 
 namespace UniiaAnonim.TGBot.Application.Services.Telegram.CommandStrategies;
@@ -16,11 +15,9 @@ namespace UniiaAnonim.TGBot.Application.Services.Telegram.CommandStrategies;
 /// </summary>
 public sealed class WelcomeStrategy(
     ITelegramBotClient botClient,
-    IStringLocalizer<Messages> localizer,
-    IOptions<TelegramBotOptions> options) : ITelegramUpdateStrategy
+    IStringLocalizer<Messages> localizer) : ITelegramUpdateStrategy
 {
     private const string Command = "/start";
-    private readonly TelegramBotOptions _options = options.Value;
 
     /// <inheritdoc/>
     public Task<bool> CanHandleAsync(Update update, CancellationToken ct = default)
@@ -37,21 +34,14 @@ public sealed class WelcomeStrategy(
             return;
         }
 
-        InlineKeyboardMarkup? replyMarkup = null;
-
-        if (!string.IsNullOrWhiteSpace(_options.AnonimWebformUrl))
-        {
-            replyMarkup = new InlineKeyboardMarkup(
-                InlineKeyboardButton.WithWebApp(
-                    text: localizer["str0001"],
-                    webApp: new WebAppInfo { Url = _options.AnonimWebformUrl }));
-        }
+        var inlineKeyboard = new InlineKeyboardMarkup(
+            InlineKeyboardButton.WithCallbackData(localizer["str0032"], ButtonPrefixes.AcceptRulesPrefix));
 
         await botClient.SendMessage(
             chatId: update.Message.Chat.Id,
             text: localizer["str0002"],
             parseMode: ParseMode.Html,
-            replyMarkup: replyMarkup,
+            replyMarkup: inlineKeyboard,
             cancellationToken: ct);
     }
 }

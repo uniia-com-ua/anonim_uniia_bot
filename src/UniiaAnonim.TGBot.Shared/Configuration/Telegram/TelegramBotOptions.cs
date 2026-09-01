@@ -26,11 +26,4 @@ public class TelegramBotOptions
     /// It is highly recommended to validate this header to prevent spoofing attacks.
     /// </remarks>
     public string? SecretToken { get; set; }
-
-    /// <summary>
-    /// Gets or sets the target URL for the Telegram Web Application.
-    /// This URL is used when generating inline or menu buttons that launch
-    /// the interactive web interface directly inside the Telegram client.
-    /// </summary>
-    public string? AnonimWebformUrl { get; set; }
 }

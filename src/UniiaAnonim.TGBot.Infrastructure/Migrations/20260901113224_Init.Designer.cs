@@ -12,8 +12,8 @@ using UniiaAnonim.TGBot.Infrastructure.Persistence;
 namespace UniiaAnonim.TGBot.Infrastructure.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260810151952_InitialMigration")]
-    partial class InitialMigration
+    [Migration("20260901113224_Init")]
+    partial class Init
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -24,6 +24,27 @@ namespace UniiaAnonim.TGBot.Infrastructure.Migrations
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
+
+            modelBuilder.Entity("UniiaAnonim.TGBot.Domain.Models.AuthorAgreement", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AuthorIdHash")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<bool>("HasAcceptedRules")
+                        .HasColumnType("boolean");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AuthorIdHash")
+                        .IsUnique();
+
+                    b.ToTable("AuthorAgreement");
+                });
 
             modelBuilder.Entity("UniiaAnonim.TGBot.Domain.Models.Channel", b =>
                 {
@@ -66,8 +87,8 @@ namespace UniiaAnonim.TGBot.Infrastructure.Migrations
                     b.Property<int>("ChannelMessageId")
                         .HasColumnType("integer");
 
-                    b.Property<bool>("IsPublished")
-                        .HasColumnType("boolean");
+                    b.Property<byte>("Status")
+                        .HasColumnType("smallint");
 
                     b.HasKey("Id");
 

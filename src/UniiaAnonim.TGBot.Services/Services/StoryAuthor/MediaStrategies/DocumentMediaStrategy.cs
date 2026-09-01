@@ -15,7 +15,7 @@ public sealed class DocumentMediaStrategy(ITelegramBotClient client) : IDefaultM
     private readonly ITelegramBotClient _client = client ?? throw new ArgumentNullException(nameof(client));
 
     /// <inheritdoc/>
-    public bool CanHandle(string contentType) => true;
+    public bool CanHandle(MessageType fileType) => true;
 
     /// <inheritdoc/>
     public IAlbumInputMedia CreateAlbumMedia(InputFile file)

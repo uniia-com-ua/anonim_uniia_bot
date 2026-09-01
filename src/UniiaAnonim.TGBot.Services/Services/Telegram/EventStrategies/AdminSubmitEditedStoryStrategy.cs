@@ -9,6 +9,7 @@ using UniiaAnonim.TGBot.Application.Interfaces.StoryAuthor;
 using UniiaAnonim.TGBot.Application.Interfaces.Telegram;
 using UniiaAnonim.TGBot.Domain.Interfaces.Repositories;
 using UniiaAnonim.TGBot.Shared.Consts;
+using UniiaAnonim.TGBot.Shared.Enums;
 using UniiaAnonim.TGBot.Shared.Extensions;
 using UniiaAnonim.TGBot.Shared.Resources;
 
@@ -79,7 +80,7 @@ public sealed partial class AdminSubmitEditedStoryStrategy(
             return;
         }
 
-        if (await storyAuthorService.IsPublishedAsync(storyId, ct))
+        if (await storyAuthorService.IsInStatusAsync(storyId, StoryStatus.Published, ct))
         {
             await botClient.SendMessage(
                 chatId: message.Chat.Id,

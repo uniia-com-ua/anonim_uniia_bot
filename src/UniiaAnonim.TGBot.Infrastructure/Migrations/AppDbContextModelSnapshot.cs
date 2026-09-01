@@ -22,6 +22,27 @@ namespace UniiaAnonim.TGBot.Infrastructure.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("UniiaAnonim.TGBot.Domain.Models.AuthorAgreement", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AuthorIdHash")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<bool>("HasAcceptedRules")
+                        .HasColumnType("boolean");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AuthorIdHash")
+                        .IsUnique();
+
+                    b.ToTable("AuthorAgreement");
+                });
+
             modelBuilder.Entity("UniiaAnonim.TGBot.Domain.Models.Channel", b =>
                 {
                     b.Property<Guid>("Id")
@@ -63,8 +84,8 @@ namespace UniiaAnonim.TGBot.Infrastructure.Migrations
                     b.Property<int>("ChannelMessageId")
                         .HasColumnType("integer");
 
-                    b.Property<bool>("IsPublished")
-                        .HasColumnType("boolean");
+                    b.Property<byte>("Status")
+                        .HasColumnType("smallint");
 
                     b.HasKey("Id");
 

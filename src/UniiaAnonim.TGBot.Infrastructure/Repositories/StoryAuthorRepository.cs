@@ -3,6 +3,7 @@ using UniiaAnonim.TGBot.Domain.Interfaces.Repositories;
 using UniiaAnonim.TGBot.Domain.Models;
 using UniiaAnonim.TGBot.Infrastructure.Persistence;
 using UniiaAnonim.TGBot.Shared.Dtos.StoryAuthor;
+using UniiaAnonim.TGBot.Shared.Enums;
 using UniiaAnonim.TGBot.Shared.Exceptions;
 
 namespace UniiaAnonim.TGBot.Infrastructure.Repositories;
@@ -18,17 +19,17 @@ public class StoryAuthorRepository(
     IStoryAuthorRepository
 {
     /// <summary>
-    /// Asynchronously checks whether an unpublished entity with the specified author identifier exists in the database.
+    /// Asynchronously checks whether the specified user has an active (not published) story in the database.
     /// </summary>
-    /// <param name="authorIdHash">The unique author identifier to check.</param>
+    /// <param name="authorIdHash">The unique hash of the author to check.</param>
     /// <param name="ct">A token to monitor for cancellation requests.</param>
     /// <returns>
-    /// <see langword="true"/> if at least one unpublished entity exists for the author; otherwise, <see langword="false"/>.
+    /// <see langword="true"/> if an active story exists for the author; otherwise, <see langword="false"/>.
     /// </returns>
-    public async Task<bool> ExistsAsync(string authorIdHash, CancellationToken ct = default)
+    public async Task<bool> HasUserActiveStoryAsync(string authorIdHash, CancellationToken ct = default)
         => await DbSet
                 .AsNoTracking()
-                .AnyAsync(x => x.AuthorIdHash == authorIdHash && !x.IsPublished, ct);
+                .AnyAsync(x => x.AuthorIdHash == authorIdHash && x.Status != StoryStatus.Published, ct);
 
     /// <summary>
     /// Asynchronously checks whether an entity with the specified story identifier exists in the database.
@@ -56,23 +57,12 @@ public class StoryAuthorRepository(
     {
         var messageId = await DbSet
             .AsNoTracking()
-            .Where(x => x.AuthorIdHash == authorIdHash && !x.IsPublished)
+            .Where(x => x.AuthorIdHash == authorIdHash && x.Status == StoryStatus.Pending)
             .Select(x => x.ChannelMessageId)
             .FirstOrDefaultAsync(ct);
 
         return messageId != default ? messageId : throw new EntityNotFoundException(nameof(StoryAuthor), authorIdHash);
     }
-
-    /// <summary>
-    /// Asynchronously marks a story author record as published based on its unique identifier.
-    /// </summary>
-    /// <param name="id">The unique identifier of the story record to update.</param>
-    /// <param name="ct">A token to monitor for cancellation requests.</param>
-    /// <returns>A task that represents the asynchronous update operation.</returns>
-    public async Task MarkAsPublishedAsync(Guid id, CancellationToken ct = default)
-        => await DbSet
-                .Where(x => x.Id == id)
-                .ExecuteUpdateAsync(s => s.SetProperty(x => x.IsPublished, true), ct);
 
     /// <summary>
     /// Asynchronously checks if a story author record is marked as published.
@@ -83,9 +73,7 @@ public class StoryAuthorRepository(
     public async Task<bool> IsPublishedAsync(Guid id, CancellationToken ct = default)
         => await DbSet
                 .AsNoTracking()
-                .Where(x => x.Id == id)
-                .Select(x => x.IsPublished)
-                .FirstOrDefaultAsync(ct);
+                .AnyAsync(x => x.Id == id && x.Status == StoryStatus.Published, ct);
 
     /// <summary>
     /// Asynchronously assigns Telegram message identifiers to a story record based on its unique identifier, including related media messages.
@@ -141,4 +129,40 @@ public class StoryAuthorRepository(
             .FirstOrDefaultAsync(x => x.Id == id, ct)
             ?? throw new EntityNotFoundException(nameof(StoryAuthor), id);
     }
+
+    /// <summary>
+    /// Asynchronously checks if the story with the specified identifier is in the given status.
+    /// </summary>
+    /// <param name="storyId">The unique identifier of the story record.</param>
+    /// <param name="status">The story status to check against.</param>
+    /// <param name="ct">A token to monitor for cancellation requests.</param>
+    /// <returns><see langword="true"/> if the story is in the specified status; otherwise, <see langword="false"/>.</returns>
+    public async Task<bool> IsInStatusAsync(Guid storyId, StoryStatus status, CancellationToken ct = default)
+        => await DbSet
+            .AsNoTracking()
+            .AnyAsync(x => x.Id == storyId && x.Status == status, ct);
+
+    /// <summary>
+    /// Asynchronously checks if the story for the specified author identifier hash is in the given status.
+    /// </summary>
+    /// <param name="authorIdHash">The hashed identifier of the author.</param>
+    /// <param name="status">The story status to check against.</param>
+    /// <param name="ct">A token to monitor for cancellation requests.</param>
+    /// <returns><see langword="true"/> if the author's story is in the specified status; otherwise, <see langword="false"/>.</returns>
+    public async Task<bool> IsInStatusAsync(string authorIdHash, StoryStatus status, CancellationToken ct = default)
+        => await DbSet
+            .AsNoTracking()
+            .AnyAsync(x => x.AuthorIdHash == authorIdHash && x.Status == status, ct);
+
+    /// <summary>
+    /// Asynchronously updates the status of the story with the specified identifier.
+    /// </summary>
+    /// <param name="storyId">The unique identifier of the story record.</param>
+    /// <param name="status">The new story status to set.</param>
+    /// <param name="ct">A token to monitor for cancellation requests.</param>
+    /// <returns>A task that represents the asynchronous update operation.</returns>
+    public async Task SetStatusAsync(Guid storyId, StoryStatus status, CancellationToken ct = default)
+        => await DbSet
+                .Where(x => x.Id == storyId)
+                .ExecuteUpdateAsync(s => s.SetProperty(x => x.Status, status), ct);
 }

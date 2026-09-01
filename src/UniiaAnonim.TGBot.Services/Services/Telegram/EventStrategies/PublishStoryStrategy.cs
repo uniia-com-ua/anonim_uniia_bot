@@ -70,7 +70,7 @@ public sealed class PublishStoryStrategy(
             var authorTelegramId = await storyAuthorService.GetDecryptedTelegramIdAsync(storyId, ct);
             var storyEntity = await storyAuthorService.GetAsync(storyId, ct);
 
-            await storyAuthorService.MarkAsPublishedAsync(storyId, ct);
+            await storyAuthorService.SetStatusAsync(storyId, StoryStatus.Published, ct);
 
             var originalContent = message.Text ?? message.Caption ?? string.Empty;
             var cleanStoryContent = ExtractStoryContent(originalContent);

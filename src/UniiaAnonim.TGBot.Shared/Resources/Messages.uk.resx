@@ -246,4 +246,15 @@
   <data name="str0031" xml:space="preserve">
     <value>⚙️ &lt;b&gt;Оберіть дію для цієї історії:&lt;/b&gt;</value>
   </data>
+  <data name="str0032" xml:space="preserve">
+    <value>✅ Прийняти правила</value>
+  </data>
+  <data name="str0033" xml:space="preserve">
+    <value>✅ Правила прийнято! Тепер ви можете пропонувати історії.
+
+Можете прямо зараз кидати свою історію в бота!</value>
+  </data>
+  <data name="str0034" xml:space="preserve">
+    <value>⚠️ Будь ласка, спочатку прийміть правила, щоб почати писати історію</value>
+  </data>
 </root>

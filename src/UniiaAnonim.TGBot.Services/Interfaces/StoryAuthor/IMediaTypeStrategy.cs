@@ -1,4 +1,5 @@
 ﻿using Telegram.Bot.Types;
+using Telegram.Bot.Types.Enums;
 using Telegram.Bot.Types.ReplyMarkups;
 
 namespace UniiaAnonim.TGBot.Application.Interfaces.StoryAuthor;
@@ -9,11 +10,11 @@ namespace UniiaAnonim.TGBot.Application.Interfaces.StoryAuthor;
 public interface IMediaTypeStrategy
 {
     /// <summary>
-    /// Determines whether this strategy can handle the specified MIME content type.
+    /// Determines whether this strategy can handle the specified Telegram media/file type.
     /// </summary>
-    /// <param name="contentType">The MIME content type of the file (e.g., "image/jpeg").</param>
-    /// <returns><see langword="true"/> if the strategy can handle the content type; otherwise, <see langword="false"/>.</returns>
-    bool CanHandle(string contentType);
+    /// <param name="fileType">The Telegram message or media type.</param>
+    /// <returns><see langword="true"/> if the strategy can handle the type; otherwise, <see langword="false"/>.</returns>
+    bool CanHandle(MessageType fileType);
 
     /// <summary>
     /// Creates an album input media object suitable for sending in a Telegram media group.

@@ -2,6 +2,7 @@
 using UniiaAnonim.TGBot.Application.Interfaces.StoryAuthor;
 using UniiaAnonim.TGBot.Domain.Interfaces.Repositories;
 using UniiaAnonim.TGBot.Shared.Dtos.StoryAuthor;
+using UniiaAnonim.TGBot.Shared.Enums;
 
 namespace UniiaAnonim.TGBot.Application.Services.StoryAuthor;
 
@@ -11,18 +12,11 @@ namespace UniiaAnonim.TGBot.Application.Services.StoryAuthor;
 /// </summary>
 public sealed class StoryAuthorService(
     IStoryAuthorRepository storyAuthorRepository,
+    IAuthorAgreementRepository authorAgreementRepository,
     ISymmetricEncryptionService symmetricEncryptionService,
     IHashService hashService)
     : IStoryAuthorService
 {
-    /// <inheritdoc />
-    public Task<bool> ExistsAsync(long telegramId, CancellationToken ct = default)
-        => storyAuthorRepository.ExistsAsync(ComputeTelegramIdHash(telegramId), ct);
-
-    /// <inheritdoc />
-    public Task<bool> ExistsAsync(Guid storyId, CancellationToken ct = default)
-        => storyAuthorRepository.ExistsAsync(storyId, ct);
-
     /// <inheritdoc />
     public async Task<TelegramMessageIds> GetAsync(Guid id, CancellationToken ct = default)
     {
@@ -68,14 +62,6 @@ public sealed class StoryAuthorService(
     }
 
     /// <inheritdoc />
-    public Task MarkAsPublishedAsync(Guid id, CancellationToken ct = default)
-        => storyAuthorRepository.MarkAsPublishedAsync(id, ct);
-
-    /// <inheritdoc />
-    public Task<bool> IsPublishedAsync(Guid id, CancellationToken ct = default)
-        => storyAuthorRepository.IsPublishedAsync(id, ct);
-
-    /// <inheritdoc />
     public async Task DeleteAsync(Guid id, CancellationToken ct = default)
     {
         await storyAuthorRepository.DeleteAsync(id, ct);
@@ -85,6 +71,46 @@ public sealed class StoryAuthorService(
     /// <inheritdoc />
     public Task<int> GetActualStoryMessageIdAsync(long telegramId, CancellationToken ct = default)
         => storyAuthorRepository.GetActualStoryMessageIdAsync(ComputeTelegramIdHash(telegramId), ct);
+
+    /// <inheritdoc />
+    public Task<bool> ExistsAsync(Guid storyId, CancellationToken ct = default)
+        => storyAuthorRepository.ExistsAsync(storyId, ct);
+
+    /// <inheritdoc />
+    public Task<bool> HasUserActiveStoryAsync(long telegramId, CancellationToken ct = default)
+        => storyAuthorRepository.HasUserActiveStoryAsync(ComputeTelegramIdHash(telegramId), ct);
+
+    /// <inheritdoc />
+    public Task<bool> HasAcceptedRulesAsync(long telegramId, CancellationToken ct = default)
+        => authorAgreementRepository.HasAcceptedRulesAsync(ComputeTelegramIdHash(telegramId), ct);
+
+    /// <inheritdoc />
+    public async Task AcceptRulesAsync(long telegramId, CancellationToken ct = default)
+    {
+        var authorIdHash = ComputeTelegramIdHash(telegramId);
+
+        await authorAgreementRepository.CreateAsync(
+            new()
+            {
+                AuthorIdHash = authorIdHash,
+                HasAcceptedRules = true,
+            },
+            ct);
+
+        await authorAgreementRepository.SaveChangesAsync(ct);
+    }
+
+    /// <inheritdoc />
+    public Task<bool> IsInStatusAsync(Guid storyId, StoryStatus status, CancellationToken ct = default)
+        => storyAuthorRepository.IsInStatusAsync(storyId, status, ct);
+
+    /// <inheritdoc />
+    public Task<bool> IsInStatusAsync(long telegramId, StoryStatus status, CancellationToken ct = default)
+        => storyAuthorRepository.IsInStatusAsync(ComputeTelegramIdHash(telegramId), status, ct);
+
+    /// <inheritdoc />
+    public Task SetStatusAsync(Guid storyId, StoryStatus status, CancellationToken ct = default)
+        => storyAuthorRepository.SetStatusAsync(storyId, status, ct);
 
     private string ComputeTelegramIdHash(long telegramId) =>
         hashService.ComputeHash(telegramId.ToString());

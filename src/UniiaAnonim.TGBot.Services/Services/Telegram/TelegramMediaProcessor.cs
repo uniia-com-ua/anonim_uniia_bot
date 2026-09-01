@@ -1,4 +1,5 @@
 ﻿using Telegram.Bot.Types;
+using Telegram.Bot.Types.Enums;
 using UniiaAnonim.TGBot.Application.Interfaces.Telegram;
 using UniiaAnonim.TGBot.Shared.Enums;
 
@@ -33,19 +34,19 @@ public sealed class TelegramMediaProcessor : ITelegramMediaProcessor
 
         if (message.Document?.FileId is { } documentId)
         {
-            mediaFiles[documentId] = StoryMediaType.Photo;
+            mediaFiles[documentId] = StoryMediaType.Document;
             return mediaFiles;
         }
 
         if (message.Animation?.FileId is { } animationId)
         {
-            mediaFiles[animationId] = StoryMediaType.Video;
+            mediaFiles[animationId] = StoryMediaType.Document;
             return mediaFiles;
         }
 
         if (message.Audio?.FileId is { } audioId)
         {
-            mediaFiles[audioId] = StoryMediaType.Photo;
+            mediaFiles[audioId] = StoryMediaType.Document;
             return mediaFiles;
         }
 
@@ -64,8 +65,7 @@ public sealed class TelegramMediaProcessor : ITelegramMediaProcessor
 
         foreach (var message in messages)
         {
-            var extractedFiles = ExtractMediaFiles(message);
-            foreach (var kvp in extractedFiles)
+            foreach (var kvp in ExtractMediaFiles(message))
             {
                 mediaFiles[kvp.Key] = kvp.Value;
             }
@@ -75,33 +75,55 @@ public sealed class TelegramMediaProcessor : ITelegramMediaProcessor
     }
 
     /// <inheritdoc/>
+    public IAlbumInputMedia ConvertToAlbumMedia(KeyValuePair<string, StoryMediaType> mediaPair, string? caption = null)
+    {
+        var fileId = mediaPair.Key;
+
+        return mediaPair.Value switch
+        {
+            StoryMediaType.Video => new InputMediaVideo(InputFile.FromFileId(fileId)) { Caption = caption },
+            StoryMediaType.Photo => new InputMediaPhoto(InputFile.FromFileId(fileId)) { Caption = caption },
+            StoryMediaType.Document => new InputMediaDocument(InputFile.FromFileId(fileId)) { Caption = caption },
+            _ => throw new NotImplementedException($"Media type '{mediaPair.Value}' is not supported."),
+        };
+    }
+
+    /// <inheritdoc/>
     public List<IAlbumInputMedia> ConvertToAlbumMedia(Dictionary<string, StoryMediaType> mediaFiles, string? cleanCaption = null)
     {
-        var mediaGroup = new List<IAlbumInputMedia>();
-
         if (mediaFiles is null || mediaFiles.Count == 0)
         {
-            return mediaGroup;
+            return [];
         }
 
+        var mediaGroup = new List<IAlbumInputMedia>(mediaFiles.Count);
         int index = 0;
+
         foreach (var pair in mediaFiles)
         {
-            var fileId = pair.Key;
-            var mediaType = pair.Value;
             var caption = (index == 0) ? cleanCaption : null;
-
-            IAlbumInputMedia mediaItem = mediaType switch
-            {
-                StoryMediaType.Video => new InputMediaVideo(InputFile.FromFileId(fileId)) { Caption = caption },
-                StoryMediaType.Photo => new InputMediaPhoto(InputFile.FromFileId(fileId)) { Caption = caption },
-                _ => throw new NotImplementedException(),
-            };
-
-            mediaGroup.Add(mediaItem);
+            mediaGroup.Add(ConvertToAlbumMedia(pair, caption));
             index++;
         }
 
         return mediaGroup;
+    }
+
+    /// <inheritdoc/>
+    public InputFile GetInputFile(KeyValuePair<string, StoryMediaType> mediaPair)
+    {
+        return InputFile.FromFileId(mediaPair.Key);
+    }
+
+    /// <inheritdoc/>
+    public MessageType GetMessageType(KeyValuePair<string, StoryMediaType> mediaPair)
+    {
+        return mediaPair.Value switch
+        {
+            StoryMediaType.Photo => MessageType.Photo,
+            StoryMediaType.Video => MessageType.Video,
+            StoryMediaType.Document => MessageType.Document,
+            _ => MessageType.Document,
+        };
     }
 }

@@ -1,0 +1,45 @@
+﻿using Telegram.Bot;
+using Telegram.Bot.Types;
+using Telegram.Bot.Types.Enums;
+using Telegram.Bot.Types.ReplyMarkups;
+using UniiaAnonim.TGBot.Application.Interfaces.StoryAuthor;
+
+namespace UniiaAnonim.TGBot.Application.Services.StoryAuthor.MediaStrategies;
+
+/// <summary>
+/// Implements the media strategy for handling video uploads.
+/// </summary>
+/// <param name="client">The Telegram bot client used to interact with the API.</param>
+public sealed class VideoMediaStrategy(ITelegramBotClient client) : IMediaTypeStrategy
+{
+    private readonly ITelegramBotClient _client = client ?? throw new ArgumentNullException(nameof(client));
+
+    /// <inheritdoc/>
+    public bool CanHandle(MessageType fileType) => fileType == MessageType.Video;
+
+    /// <inheritdoc/>
+    public IAlbumInputMedia CreateAlbumMedia(InputFile file)
+    {
+        ArgumentNullException.ThrowIfNull(file);
+        return new InputMediaVideo(file);
+    }
+
+    /// <inheritdoc/>
+    public Task<Message> SendSingleAsync(
+        long chatId,
+        InputFile file,
+        string? caption,
+        InlineKeyboardMarkup? keyboard,
+        CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(file);
+
+        return _client.SendVideo(
+            chatId: chatId,
+            video: file,
+            caption: caption,
+            parseMode: caption is not null ? ParseMode.Html : ParseMode.None,
+            replyMarkup: keyboard,
+            cancellationToken: ct);
+    }
+}

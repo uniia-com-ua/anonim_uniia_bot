@@ -1,8 +1,8 @@
-# Розгортання на Orange Pi 5
+# Deployment
 
-Реліз у GitHub збирає образ `linux/arm64` на Debian 13 і публікує його в GHCR. На платі образ стягується вручну і лишається запущеним після перезавантаження: політика `unless-stopped` плюс увімкнений демон Docker.
+Документація з розгортання **UniiaAnonim.TGBot** у прод. Бот працює через Telegram **webhook** і потребує публічного HTTPS-endpoint. Прод хоститься на домашньому **Proxmox**, публікується через **Cloudflare Tunnel**, а CI/CD виконується на **GitHub Actions** із деплоєм через **self-hosted runner**.
 
-Образ уже містить `appsettings.json` зі стабами. Його не редагують. Бойові значення кладуть у `appsettings.Production.json` поруч із контейнером і монтують поверх: ASP.NET підхоплює той самий набір ключів і замінює стаби.
+Образ уже містить `appsettings.json` зі стабами. Під час деплою runner записує ті самі ключі в `bot.env`, і змінні середовища перекривають стаби.
 
 ```json
 {
@@ -22,176 +22,160 @@
 }
 ```
 
-Образ: `ghcr.io/uniia-com-ua/anonim_uniia_bot:<тег-релізу>`.
+---
+
+## Архітектура
+
+```
+GitHub Release (published, target = main)
+        │
+        ▼
+GitHub Actions (ubuntu-latest)
+  ├─ guard          → перевірка, що коміт релізу є в main
+  ├─ build          → dotnet test → docker build → push у GHCR (:<tag> + :latest)
+  └─ release-notes  → опис релізу: посилання + автоматичний changelog
+        │
+        ▼  (self-hosted runner сам забирає джобу — без вхідних портів)
+deploy (self-hosted, prod) на Proxmox VM
+  ├─ генерує .env / bot.env / appsettings.Production.json із GitHub Secrets
+  └─ docker compose pull && up -d
+        │
+        ▼
+docker compose: [ bot ] ←→ [ cloudflared ] ──tunnel──► Cloudflare ──► https://<BASE_URL>
+                                                                              │
+                                                                   Telegram webhook
+```
+
+Ключова ідея: секрети живуть у **GitHub Environment `production`** і потрапляють на сервер лише в момент деплою (їх записує self-hosted runner локально на VM). У репозиторії секретів немає.
+
+Каталог на VM — `~/anonim-uniia-bot`, щоб не перетнутися з деплоєм `uniia_tg_bot` у `~/uniia-bot`, якщо обидва раннери сидять на одній машині.
 
 ---
 
-## 1. Перевірити плату
+## Файли
 
-Потрібні Debian і архітектура `aarch64`.
+| Файл | Призначення |
+|------|-------------|
+| `Dockerfile` | Multi-stage build .NET 10; у фінальний образ додано `curl` + `HEALTHCHECK` на `/health` |
+| `docker-compose.yml` | Сервіси `bot` + `dozzle` + `cloudflared`, спільна мережа, ліміти, ротація логів |
+| `.github/workflows/deploy.yml` | Пайплайн: guard → build/push → release-notes → deploy |
 
-```bash
-. /etc/os-release && echo "$ID $VERSION_ID"
-uname -m
-```
+Файли, що **генеруються на VM** під час деплою (у `~/anonim-uniia-bot`, не комітяться):
 
-Очікувано: `debian` і `aarch64`.
-
----
-
-## 2. Встановити Docker
-
-```bash
-sudo apt-get update
-sudo apt-get install -y ca-certificates curl
-sudo install -m 0755 -d /etc/apt/keyrings
-sudo curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc
-sudo chmod a+r /etc/apt/keyrings/docker.asc
-
-echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-
-sudo apt-get update
-sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
-sudo usermod -aG docker "$USER"
-sudo systemctl enable --now docker
-```
-
-Вийдіть із SSH і зайдіть знову, щоб група `docker` застосувалась. Перевірка:
-
-```bash
-docker info >/dev/null && echo "docker ok"
-```
-
-`systemctl enable` тримає демон увімкненим після reboot. Контейнер із `--restart unless-stopped` підніметься слідом.
+| Файл | Вміст | Права |
+|------|-------|-------|
+| `.env` | `BOT_IMAGE`, `TUNNEL_TOKEN` (підстановка в compose) | `600` |
+| `bot.env` | перекриття стабів: `ConnectionStrings__DefaultConnection`, `GeneralOptions__*`, `Telegram__*` | `600` |
+| `appsettings.Production.json` | порожній `{}`: скалярні налаштування йдуть через `bot.env` | `644` (читає non-root контейнер; теку захищає `700`) |
 
 ---
 
-## 3. Увійти в GHCR
+## Конфігурація GitHub
 
-Репозиторій приватний, тож образ теж приватний. У GitHub: **Settings → Developer settings → Personal access tokens**. Для classic-токена достатньо scope `read:packages`.
+У репозиторії: **Settings → Environments → `production`**.
 
-```bash
-echo 'ВАШ_ТОКЕН' | docker login ghcr.io -u ВАШ_GITHUB_ЛОГІН --password-stdin
-```
+### Secrets
 
----
+| Secret | Мапиться на | Замість стаба |
+|--------|-------------|---------------|
+| `CONNECTION_STRING` | `ConnectionStrings__DefaultConnection` | `your_connection_string` |
+| `SYMMETRIC_ENCRYPTION_KEY` | `GeneralOptions__SymmetricEncryptionKey` | `random_guid` |
+| `HASHING_KEY` | `GeneralOptions__HashingKey` | `random_guid` |
+| `TELEGRAM_BOT_TOKEN` | `Telegram__BotToken` | `random_guid` |
+| `TELEGRAM_SECRET_TOKEN` | `Telegram__SecretToken` | `random_guid` |
+| `CLOUDFLARE_TUNNEL_TOKEN` | env конектора `cloudflared` | — |
 
-## 4. Заповнити стаби
+`TELEGRAM_SECRET_TOKEN`, `SYMMETRIC_ENCRYPTION_KEY` і `HASHING_KEY` — випадкові рядки (`openssl rand -hex 32`). Ключі шифрування після першого прод-запуску не змінюють. `CONNECTION_STRING` — рядок Npgsql до вже доступного PostgreSQL, наприклад `Host=10.0.0.5;Port=5432;Database=uniia;Username=uniia;Password=...`.
 
-```bash
-mkdir -p "$HOME/uniia-bot"
-chmod 700 "$HOME/uniia-bot"
-cd "$HOME/uniia-bot"
+### Variables
 
-ENC_KEY="$(openssl rand -hex 32)"
-HASH_KEY="$(openssl rand -hex 32)"
-SECRET="$(openssl rand -hex 32)"
+| Variable | Приклад | Замість стаба |
+|----------|---------|---------------|
+| `BASE_URL` | `https://anonim.uniia.com.ua` | `your_base_url` |
+| `DEFAULT_LANGUAGE` | `uk-UA` | `uk-UA` (можна лишити) |
 
-cat > appsettings.Production.json <<EOF
-{
-  "ConnectionStrings": {
-    "DefaultConnection": "Host=192.168.1.10;Port=5432;Database=uniia;Username=uniia;Password=ЗМІНІТЬ"
-  },
-  "GeneralOptions": {
-    "BaseUrl": "https://bot.example.com",
-    "DefaultLanguage": "uk-UA",
-    "SymmetricEncryptionKey": "${ENC_KEY}",
-    "HashingKey": "${HASH_KEY}"
-  },
-  "Telegram": {
-    "SecretToken": "${SECRET}",
-    "BotToken": "ТОКЕН_ВІД_BOTFATHER"
-  }
-}
-EOF
-
-chmod 644 appsettings.Production.json
-```
-
-Що замінити:
-
-| Стаб в образі | У проді |
-|---------------|---------|
-| `your_connection_string` | рядок Npgsql до вже запущеного PostgreSQL |
-| `your_base_url` | публічний HTTPS, на який Telegram шле webhook |
-| `random_guid` у `SymmetricEncryptionKey` і `HashingKey` | згенеровані вище ключі; після першого запуску їх не змінюють |
-| `random_guid` у `BotToken` | токен BotFather |
-| `random_guid` у `SecretToken` | секрет webhook |
-| `uk-UA` | можна лишити |
-
-`localhost` у рядку підключення з контейнера — це сам контейнер, а не плата. Вкажіть IP машини, де стоїть PostgreSQL.
-
-Контейнер працює від uid `1654`, тому файл має бути `644`. Каталог `700` закриває його від інших користувачів плати.
+> Додати нову змінну застосунку = один рядок у кроці `Stage deploy files` (`bot.env`) + (за потреби) новий secret/variable. `docker-compose.yml` чіпати не треба.
 
 ---
 
-## 5. Стягнути образ і запустити назавжди
+## Інфраструктура (одноразове налаштування)
 
-Підставте тег опублікованого релізу, наприклад `v1.0.0`.
+### Proxmox VM
+- Debian 12, 2 vCPU / 4 GB / 30 GB, **Start at boot**, QEMU guest agent.
+- Зафіксований внутрішній IP (DHCP reservation).
+- SSH по ключах (без root/паролів), `fail2ban`, `unattended-upgrades`.
+- Docker Engine + Compose plugin; користувач у групі `docker`.
+- `git` (потрібен для `actions/checkout`).
+- PostgreSQL, до якого достукується контейнер бота (окремо від compose).
 
-```bash
-cd "$HOME/uniia-bot"
+### Self-hosted runner
+- Зареєстрований під користувачем VM (у групі `docker`), як systemd-сервіс (`svc.sh install/start`).
+- **Мітки:** `self-hosted`, `prod` (workflow вимагає `runs-on: [self-hosted, prod]`).
+  > Мітка `prod` має бути саме в **labels** раннера, а не лише в його імені.
 
-docker pull ghcr.io/uniia-com-ua/anonim_uniia_bot:v1.0.0
+### Cloudflare Tunnel (через дашборд Zero Trust)
+- Тунель, конектор запускається контейнером `cloudflared` (токен у `CLOUDFLARE_TUNNEL_TOKEN`).
+- **Public hostname:** значення `BASE_URL` → Service `HTTP` `bot:8080`.
+- Webhook-шлях застосунку: `api/webhook`.
+- DNS-запис (CNAME, proxied) створюється автоматично.
 
-docker run -d \
-  --name uniia-bot \
-  --restart unless-stopped \
-  --platform linux/arm64 \
-  -p 127.0.0.1:8080:8080 \
-  -e ASPNETCORE_ENVIRONMENT=Production \
-  -v "$HOME/uniia-bot/appsettings.Production.json:/app/appsettings.Production.json:ro" \
-  ghcr.io/uniia-com-ua/anonim_uniia_bot:v1.0.0
-```
-
-Порт відкритий лише на самій платі. Публічний HTTPS має проксувати запити на `127.0.0.1:8080`.
-
----
-
-## 6. Перевірити
-
-```bash
-docker ps
-docker inspect --format '{{.HostConfig.RestartPolicy.Name}} {{.Os}}/{{.Architecture}}' uniia-bot
-curl -fsS http://127.0.0.1:8080/health
-docker logs -f uniia-bot
-```
-
-Очікувано: контейнер `Up`, політика `unless-stopped`, платформа `linux/arm64`, health відповідає, у логах webhook зареєстрований.
-
-Після `sudo reboot` той самий `docker ps` має знову показати `uniia-bot`.
+### GHCR
+- Образи приватні (репо приватне). `build` пушить з `GITHUB_TOKEN` (`packages: write`), `deploy` тягне (`packages: read`).
+- Якщо `docker compose pull` → `denied`: **Package → Settings → Manage Actions access** → дати репо доступ.
 
 ---
 
-## 7. Оновити версію
+## Як випустити реліз (деплой)
 
-```bash
-cd "$HOME/uniia-bot"
-docker pull ghcr.io/uniia-com-ua/anonim_uniia_bot:v1.1.0
-docker stop uniia-bot
-docker rm uniia-bot
+1. GitHub → **Releases → Draft a new release**.
+2. **Choose a tag** → новий тег (напр. `v1.0.0`), **Target = `main`**.
+3. (Опційно) залишити опис порожнім — він згенерується автоматично.
+4. **Publish release**.
 
-docker run -d \
-  --name uniia-bot \
-  --restart unless-stopped \
-  --platform linux/arm64 \
-  -p 127.0.0.1:8080:8080 \
-  -e ASPNETCORE_ENVIRONMENT=Production \
-  -v "$HOME/uniia-bot/appsettings.Production.json:/app/appsettings.Production.json:ro" \
-  ghcr.io/uniia-com-ua/anonim_uniia_bot:v1.1.0
-```
-
-Файл зі стабами не чіпають, якщо секрети не змінювались.
-
-Відкат — ті самі команди з попереднім тегом.
+Далі автоматично:
+- `guard` перевіряє, що тег із `main`;
+- `build` ганяє тести, збирає й пушить образ `ghcr.io/<owner>/<repo>:v1.0.0` + `:latest`;
+- `release-notes` оновлює опис релізу (посилання + changelog);
+- `deploy` піднімає новий образ на VM.
 
 ---
 
-## 8. Зупинити
+## Перевірка після деплою
 
 ```bash
-docker stop uniia-bot
-docker rm uniia-bot
+# на VM
+docker ps                                      # bot — healthy, cloudflared — running
+cd ~/anonim-uniia-bot && docker compose logs -f bot   # очікувано: webhook зареєстрований
 ```
 
-`--restart unless-stopped` після явного `docker stop` сам контейнер не піднімає.
+- Cloudflare Zero Trust → Tunnels → конектор = **Healthy**.
+- Написати боту в Telegram — оновлення має дійти.
+- **Логи:** `<BASE_URL>/main/logs/`
+
+---
+
+## Rollback
+
+Деплоїться образ із тегом релізу, тож відкат — це запуск попередньої версії:
+
+```bash
+cd ~/anonim-uniia-bot
+# у .env вказати попередній тег образу
+sed -i 's#^BOT_IMAGE=.*#BOT_IMAGE=ghcr.io/<owner>/<repo>:v0.9.0#' .env
+docker compose pull && docker compose up -d
+```
+
+(або повторно опублікувати/створити реліз на потрібному комміті).
+
+---
+
+## Типові проблеми
+
+| Симптом | Причина / рішення |
+|---------|-------------------|
+| Джоба `deploy` висить на `Waiting for a runner...` | Раннеру бракує мітки `prod`. Додати label у Settings → Actions → Runners. |
+| `Access to the path '/app/appsettings.Production.json' is denied` | Файл недоступний non-root юзеру контейнера. Має бути `chmod 0644` (вже у workflow). |
+| `docker compose pull` → `denied` | GHCR-пакет не має доступу від репо. Налаштувати Manage Actions access. |
+| Бот падає на міграції БД | `CONNECTION_STRING` лишився стабом або хост недоступний з контейнера. `localhost` у рядку — це сам контейнер. |
+| Webhook не приходить | Перевірити `BASE_URL`, статус тунелю, public hostname `api/webhook`, `Telegram__SecretToken`. |
+| Логи `/app/Logs` не пишуться | Очікувано: контейнер non-root. Логи доступні через `docker compose logs` (Console + json-file). |

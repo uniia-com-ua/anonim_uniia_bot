@@ -72,20 +72,15 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
       - name: Set up Buildx
         uses: docker/setup-buildx-action@v3
 
-      # Orange Pi 5 is RK3588 (aarch64). Publish a single Debian linux/arm64 image.
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
           context: .
           file: ./Dockerfile
           push: true
-          platforms: linux/arm64
           tags: |
             ${{ steps.meta.outputs.image }}
             ${{ steps.meta.outputs.image_latest }}
@@ -126,7 +121,7 @@ jobs:
             echo
             echo "- **Live bot:** ${BASE_URL}"
             echo "- **Logs:** ${BASE_URL}/main/logs/"
-            echo "- **Container image:** \`${IMAGE}\` (\`linux/arm64\`, Debian 13, Orange Pi 5)"
+            echo "- **Container image:** \`${IMAGE}\`"
             echo "- **GHCR package:** ${PKG_URL}"
             echo "- **Source commit:** https://github.com/${GITHUB_REPOSITORY}/commit/${GITHUB_SHA}"
             echo
@@ -134,3 +129,75 @@ jobs:
           } > body.md
 
           gh release edit "${RELEASE_TAG}" --notes-file body.md
+
+  deploy:
+    name: Deploy on Proxmox VM
+    needs: build
+    runs-on: [self-hosted, prod]
+    environment: production
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Stage deploy files
+        env:
+          BOT_IMAGE: ${{ needs.build.outputs.image }}
+          BASE_URL: ${{ vars.BASE_URL }}
+          DEFAULT_LANGUAGE: ${{ vars.DEFAULT_LANGUAGE }}
+          CONNECTION_STRING: ${{ secrets.CONNECTION_STRING }}
+          SYMMETRIC_ENCRYPTION_KEY: ${{ secrets.SYMMETRIC_ENCRYPTION_KEY }}
+          HASHING_KEY: ${{ secrets.HASHING_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_SECRET_TOKEN: ${{ secrets.TELEGRAM_SECRET_TOKEN }}
+          TUNNEL_TOKEN: ${{ secrets.CLOUDFLARE_TUNNEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          DEPLOY_DIR="$HOME/anonim-uniia-bot"
+          mkdir -p "$DEPLOY_DIR"
+          umask 077
+
+          cp docker-compose.yml "$DEPLOY_DIR/docker-compose.yml"
+
+          # Variables used only for compose substitution (image tag, tunnel token)
+          {
+            echo "BOT_IMAGE=${BOT_IMAGE}"
+            echo "TUNNEL_TOKEN=${TUNNEL_TOKEN}"
+          } > "$DEPLOY_DIR/.env"
+
+          # Overrides the stubs shipped in the image's appsettings.json.
+          # Keys map 1:1 to configuration. To add a new env var, add a single
+          # line here — compose needs no changes.
+          {
+            echo "ConnectionStrings__DefaultConnection=${CONNECTION_STRING}"
+            echo "GeneralOptions__BaseUrl=${BASE_URL}"
+            echo "GeneralOptions__DefaultLanguage=${DEFAULT_LANGUAGE}"
+            echo "GeneralOptions__SymmetricEncryptionKey=${SYMMETRIC_ENCRYPTION_KEY}"
+            echo "GeneralOptions__HashingKey=${HASHING_KEY}"
+            echo "Telegram__BotToken=${TELEGRAM_BOT_TOKEN}"
+            echo "Telegram__SecretToken=${TELEGRAM_SECRET_TOKEN}"
+          } > "$DEPLOY_DIR/bot.env"
+
+          # Mounted into the container, which runs as a non-root user (APP_UID),
+          # so it must be world-readable. The parent dir (~/anonim-uniia-bot, mode 700)
+          # keeps it private from other host users.
+          # Scalar settings live in bot.env and override the image stubs.
+          printf '%s\n' '{}' > "$DEPLOY_DIR/appsettings.Production.json"
+          chmod 0644 "$DEPLOY_DIR/appsettings.Production.json"
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull & start
+        run: |
+          set -euo pipefail
+          cd "$HOME/anonim-uniia-bot"
+          docker compose pull
+          docker compose up -d --remove-orphans
+          docker image prune -f

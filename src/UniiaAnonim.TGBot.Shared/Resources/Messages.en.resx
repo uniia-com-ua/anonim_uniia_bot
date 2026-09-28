@@ -118,105 +118,147 @@
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
   <data name="str0001" xml:space="preserve">
-    <value>User</value>
+    <value>✍️ Write a story</value>
   </data>
   <data name="str0002" xml:space="preserve">
-    <value>User</value>
+    <value>👋 &lt;b&gt;Welcome to the anonymous stories bot!&lt;/b&gt;
+
+Here you can share your thoughts, stories, or confessions completely anonymously.
+
+Before you start, please read our &lt;a href="https://telegra.ph/Pravila-ta-konf%D1%96denc%D1%96jn%D1%96st-09-21"&gt;community rules&lt;/a&gt; to avoid misunderstandings.
+
+👇 Click the button below to agree to the rules and proceed:</value>
   </data>
   <data name="str0003" xml:space="preserve">
-    <value>User</value>
+    <value>⏳ &lt;b&gt;Your previous story is still under review.&lt;/b&gt;
+
+Please wait for moderation to complete before submitting a new one.</value>
   </data>
   <data name="str0004" xml:space="preserve">
-    <value>User</value>
+    <value>&lt;b&gt;📬 New anonymous story&lt;/b&gt;
+
+🆔 &lt;code&gt;{0}&lt;/code&gt;
+
+💬 &lt;i&gt;{1}&lt;/i&gt;</value>
   </data>
   <data name="str0005" xml:space="preserve">
-    <value>User</value>
+    <value>✅ &lt;b&gt;Your story has been accepted for review!&lt;/b&gt;
+
+Thank you for sharing. We will notify you of the result. If you want to clarify details or send additional information, you can write to this bot — admins will receive your message &lt;b&gt;completely anonymously&lt;/b&gt;.</value>
   </data>
   <data name="str0006" xml:space="preserve">
-    <value>User</value>
+    <value>👤 &lt;b&gt;Reply from the story author&lt;/b&gt;
+
+💬 &lt;i&gt;{0}&lt;/i&gt;</value>
   </data>
   <data name="str0007" xml:space="preserve">
-    <value>User</value>
+    <value>❌ Error: invalid story identifier.</value>
   </data>
   <data name="str0008" xml:space="preserve">
-    <value>User</value>
+    <value>😔 &lt;b&gt;Unfortunately, your story has been rejected.&lt;/b&gt;
+
+The administrator decided not to publish it.</value>
   </data>
   <data name="str0009" xml:space="preserve">
-    <value>User</value>
+    <value>{0}
+
+━━━━━━━━━━━━━━━
+&lt;b&gt;[Status: 🔴 Rejected]&lt;/b&gt;</value>
   </data>
   <data name="str0010" xml:space="preserve">
-    <value>User</value>
+    <value>✅ Story successfully rejected.</value>
   </data>
   <data name="str0011" xml:space="preserve">
-    <value>User</value>
+    <value>❌ An error occurred during rejection.</value>
   </data>
   <data name="str0012" xml:space="preserve">
-    <value>User</value>
+    <value>{0}
+
+━━━━━━━━━━━━━━━
+&lt;b&gt;[Status: 🟢 Published]&lt;/b&gt;</value>
   </data>
   <data name="str0013" xml:space="preserve">
-    <value>User</value>
+    <value>✅ Story successfully published.</value>
   </data>
   <data name="str0014" xml:space="preserve">
-    <value>User</value>
+    <value>🎉 &lt;b&gt;Your story has been successfully published!&lt;/b&gt;
+
+Thank you for sharing! If you want to submit another story, you can simply write it to this bot in &lt;b&gt;a single message&lt;/b&gt; (along with text and images/videos, if any).</value>
   </data>
   <data name="str0015" xml:space="preserve">
-    <value>User</value>
+    <value>❌ An error occurred during publication.</value>
   </data>
   <data name="str0016" xml:space="preserve">
-    <value>User</value>
+    <value>⚠️ &lt;b&gt;You cannot reply to rejected stories.&lt;/b&gt;</value>
   </data>
   <data name="str0017" xml:space="preserve">
-    <value>User</value>
+    <value>⚠️ &lt;b&gt;You cannot reply to published stories.&lt;/b&gt;</value>
   </data>
   <data name="str0018" xml:space="preserve">
-    <value>User</value>
+    <value>✏️ &lt;b&gt;Send the edited story text&lt;/b&gt; in reply to this message.
+
+🆔 &lt;code&gt;{0}&lt;/code&gt;</value>
   </data>
   <data name="str0019" xml:space="preserve">
-    <value>User</value>
+    <value>⚠️ &lt;b&gt;Your story was edited by a moderator&lt;/b&gt; to comply with the community rules. 
+
+Check out the final version 👇
+
+&lt;i&gt;{0}&lt;/i&gt;</value>
   </data>
   <data name="str0020" xml:space="preserve">
-    <value>User</value>
+    <value>✅ I agree to publish</value>
   </data>
   <data name="str0021" xml:space="preserve">
-    <value>User</value>
+    <value>❌ I refuse</value>
   </data>
   <data name="str0022" xml:space="preserve">
-    <value>User</value>
+    <value>⏳ &lt;b&gt;The edited version has been successfully sent to the author.&lt;/b&gt;
+
+Waiting for approval.</value>
   </data>
   <data name="str0023" xml:space="preserve">
-    <value>User</value>
+    <value>🟢 &lt;b&gt;The author approved the edit!&lt;/b&gt;
+
+The message has been successfully changed.</value>
   </data>
   <data name="str0024" xml:space="preserve">
-    <value>User</value>
+    <value>🔴 &lt;b&gt;The author refused to publish the corrected version of the story &lt;/b&gt;</value>
   </data>
   <data name="str0025" xml:space="preserve">
-    <value>User</value>
+    <value>✅ &lt;b&gt;Thank you!&lt;/b&gt; The edited story is approved for publication.</value>
   </data>
   <data name="str0026" xml:space="preserve">
-    <value>User</value>
+    <value>❌ &lt;b&gt;You refused publication.&lt;/b&gt;
+
+If you have any questions or decide to try again, you can submit a new story again in &lt;b&gt;a single message&lt;/b&gt; (along with text and images/videos, if needed) to this bot!</value>
   </data>
   <data name="str0027" xml:space="preserve">
-    <value>User</value>
+    <value>🤷‍♂️ &lt;b&gt;You have no active stories.&lt;/b&gt;
+
+If you want to share one, you can do it here 👇</value>
   </data>
   <data name="str0028" xml:space="preserve">
-    <value>User</value>
+    <value>🟢 Publish</value>
   </data>
   <data name="str0029" xml:space="preserve">
-    <value>User</value>
+    <value>🟡 Edit</value>
   </data>
   <data name="str0030" xml:space="preserve">
-    <value>User</value>
+    <value>🔴 Reject</value>
   </data>
   <data name="str0031" xml:space="preserve">
-    <value>User</value>
+    <value>⚙️ &lt;b&gt;Choose an action for this story:&lt;/b&gt;</value>
   </data>
   <data name="str0032" xml:space="preserve">
-    <value>User</value>
+    <value>✅ Accept rules</value>
   </data>
   <data name="str0033" xml:space="preserve">
-    <value>User</value>
+    <value>✅ Rules accepted! You can now propose stories.
+
+You can drop your story to the bot right now!</value>
   </data>
   <data name="str0034" xml:space="preserve">
-    <value>User</value>
+    <value>⚠️ Please accept the rules first to start writing a story</value>
   </data>
 </root>

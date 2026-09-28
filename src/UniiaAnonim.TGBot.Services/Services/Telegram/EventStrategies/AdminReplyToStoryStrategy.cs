@@ -80,18 +80,6 @@ public sealed partial class AdminReplyToStoryStrategy(
             return;
         }
 
-        if (await storyAuthorService.IsInStatusAsync(storyId, StoryStatus.Pending, ct))
-        {
-            await botClient.SendMessage(
-                chatId: message.Chat.Id,
-                text: localizer["str0016"],
-                parseMode: ParseMode.Html,
-                replyParameters: new ReplyParameters { MessageId = message.MessageId },
-                cancellationToken: ct);
-
-            return;
-        }
-
         var authorId = await storyAuthorService.GetDecryptedTelegramIdAsync(storyId, ct);
 
         try

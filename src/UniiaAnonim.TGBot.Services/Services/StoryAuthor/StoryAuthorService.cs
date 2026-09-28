@@ -41,6 +41,7 @@ public sealed class StoryAuthorService(
             {
                 AuthorId = symmetricEncryptionService.Encrypt(stringId),
                 AuthorIdHash = hashService.ComputeHash(stringId),
+                Status = StoryStatus.Pending,
             },
             ct);
 

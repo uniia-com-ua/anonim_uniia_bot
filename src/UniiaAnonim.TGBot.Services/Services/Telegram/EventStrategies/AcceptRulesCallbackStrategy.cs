@@ -43,7 +43,10 @@ public sealed class AcceptRulesCallbackStrategy(
 
         var telegramId = callbackQuery.From.Id;
 
-        await storyAuthorService.AcceptRulesAsync(telegramId, ct);
+        if (!await storyAuthorService.HasAcceptedRulesAsync(telegramId, ct))
+        {
+            await storyAuthorService.AcceptRulesAsync(telegramId, ct);
+        }
 
         await botClient.SendMessage(
             chatId: callbackQuery.Message.Chat.Id,

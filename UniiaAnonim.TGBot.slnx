@@ -1,0 +1,8 @@
+<Solution>
+  <Project Path="src/UniiaAnonim.TGBot.Api/UniiaAnonim.TGBot.Api.csproj" />
+  <Project Path="src/UniiaAnonim.TGBot.Domain/UniiaAnonim.TGBot.Domain.csproj" />
+  <Project Path="src/UniiaAnonim.TGBot.Infrastructure/UniiaAnonim.TGBot.Infrastructure.csproj" />
+  <Project Path="src/UniiaAnonim.TGBot.Services/UniiaAnonim.TGBot.Application.csproj" Id="d6e40b06-aa25-4f0d-b34e-c6eb120c4f99" />
+  <Project Path="src/UniiaAnonim.TGBot.Shared/UniiaAnonim.TGBot.Shared.csproj" />
+  <Project Path="src/UniiaAnonim.TGBot.Tests/UniiaAnonim.TGBot.Tests.csproj" />
+</Solution>

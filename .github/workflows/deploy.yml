@@ -1,0 +1,225 @@
+name: Release & Deploy
+
+on:
+  release:
+    types: [published]
+
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+jobs:
+  guard:
+    name: Verify release is from main
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Ensure release commit is on main
+        run: |
+          set -euo pipefail
+          git fetch origin main:refs/remotes/origin/main
+          if git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "OK: $GITHUB_SHA is part of main."
+          else
+            echo "::error::Release tag '${{ github.event.release.tag_name }}' is not based on the main branch."
+            exit 1
+          fi
+
+  build:
+    name: Build, test & push image
+    needs: guard
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.meta.outputs.image }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore UniiaAnonim.TGBot.slnx
+
+      - name: Build
+        run: dotnet build UniiaAnonim.TGBot.slnx -c Release --no-restore
+
+      - name: Test
+        run: dotnet test UniiaAnonim.TGBot.slnx -c Release --no-build --verbosity normal
+
+      - name: Compute image name
+        id: meta
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          REPO_LC="${GITHUB_REPOSITORY,,}"
+          echo "image=ghcr.io/${REPO_LC}:${RELEASE_TAG}" >> "$GITHUB_OUTPUT"
+          echo "image_latest=ghcr.io/${REPO_LC}:latest" >> "$GITHUB_OUTPUT"
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: |
+            ${{ steps.meta.outputs.image }}
+            ${{ steps.meta.outputs.image_latest }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  release-notes:
+    name: Generate release description
+    needs: guard
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Compose description (links + changelog)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          BASE_URL: ${{ vars.BASE_URL }}
+        run: |
+          set -euo pipefail
+          REPO_LC="${GITHUB_REPOSITORY,,}"
+          REPO_NAME="${GITHUB_REPOSITORY##*/}"
+          IMAGE="ghcr.io/${REPO_LC}:${RELEASE_TAG}"
+          PKG_URL="https://github.com/${GITHUB_REPOSITORY}/pkgs/container/${REPO_NAME}"
+
+          # Auto-generated changelog (merged PRs, commits, contributors, compare link).
+          # previous_tag is auto-detected by GitHub.
+          CHANGELOG=$(gh api "repos/${GITHUB_REPOSITORY}/releases/generate-notes" \
+            -f tag_name="${RELEASE_TAG}" --jq '.body')
+
+          {
+            echo "## Deployment"
+            echo
+            echo "- **Live bot:** ${BASE_URL}"
+            echo "- **Logs:** ${BASE_URL}/main/logs/"
+            echo "- **Container image:** \`${IMAGE}\`"
+            echo "- **GHCR package:** ${PKG_URL}"
+            echo "- **Source commit:** https://github.com/${GITHUB_REPOSITORY}/commit/${GITHUB_SHA}"
+            echo
+            echo "${CHANGELOG}"
+          } > body.md
+
+          gh release edit "${RELEASE_TAG}" --notes-file body.md
+
+  deploy:
+    name: Deploy on Proxmox VM
+    needs: build
+    runs-on: [self-hosted, prod]
+    environment: production
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Stage deploy files
+        env:
+          BOT_IMAGE: ${{ needs.build.outputs.image }}
+          BASE_URL: ${{ vars.BASE_URL }}
+          DEFAULT_LANGUAGE: ${{ vars.DEFAULT_LANGUAGE }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_SECRET_TOKEN: ${{ secrets.TELEGRAM_SECRET_TOKEN }}
+          GOOGLE_SHEETS_SPREADSHEET_ID: ${{ secrets.GOOGLE_SHEETS_SPREADSHEET_ID }}
+          GS_USER_SHEET_NAME: ${{ vars.GS_USER_SHEET_NAME }}
+          GS_USER_RANGE: ${{ vars.GS_USER_RANGE }}
+          GS_STAGE_SHEET_NAME: ${{ vars.GS_STAGE_SHEET_NAME }}
+          GS_STAGE_RANGE: ${{ vars.GS_STAGE_RANGE }}
+          GS_CALENDAR_EVENT_SHEET_NAME: ${{ vars.GS_CALENDAR_EVENT_SHEET_NAME }}
+          GS_CALENDAR_EVENT_RANGE: ${{ vars.GS_CALENDAR_EVENT_RANGE }}
+          GOOGLE_CALENDAR_ID: ${{ secrets.GOOGLE_CALENDAR_ID }}
+          GOOGLE_DRIVE_FOLDER_ID: ${{ secrets.GOOGLE_DRIVE_FOLDER_ID }}
+          TUNNEL_TOKEN: ${{ secrets.CLOUDFLARE_TUNNEL_TOKEN }}
+          GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
+        run: |
+          set -euo pipefail
+          DEPLOY_DIR="$HOME/uniia-bot"
+          mkdir -p "$DEPLOY_DIR"
+          umask 077
+
+          cp docker-compose.yml "$DEPLOY_DIR/docker-compose.yml"
+
+          # Variables used only for compose substitution (image tag, tunnel token)
+          {
+            echo "BOT_IMAGE=${BOT_IMAGE}"
+            echo "TUNNEL_TOKEN=${TUNNEL_TOKEN}"
+          } > "$DEPLOY_DIR/.env"
+
+          # Application environment (keys map 1:1 to the bot's configuration).
+          # To add a new env var, add a single line here — compose needs no changes.
+          {
+            echo "GeneralOptions__BaseUrl=${BASE_URL}"
+            echo "GeneralOptions__DefaultLanguage=${DEFAULT_LANGUAGE}"
+            echo "Telegram__BotToken=${TELEGRAM_BOT_TOKEN}"
+            echo "Telegram__SecretToken=${TELEGRAM_SECRET_TOKEN}"
+            echo "GoogleSheets__SpreadsheetId=${GOOGLE_SHEETS_SPREADSHEET_ID}"
+            echo "GoogleSheets__Mappings__User__SheetName=${GS_USER_SHEET_NAME}"
+            echo "GoogleSheets__Mappings__User__Range=${GS_USER_RANGE}"
+            echo "GoogleSheets__Mappings__Stage__SheetName=${GS_STAGE_SHEET_NAME}"
+            echo "GoogleSheets__Mappings__Stage__Range=${GS_STAGE_RANGE}"
+            echo "GoogleSheets__Mappings__CalendarEvent__SheetName=${GS_CALENDAR_EVENT_SHEET_NAME}"
+            echo "GoogleSheets__Mappings__CalendarEvent__Range=${GS_CALENDAR_EVENT_RANGE}"
+            echo "GoogleCalendar__CalendarId=${GOOGLE_CALENDAR_ID}"
+            # Enable impersonation for domain-wide delegation in Google Workspace.
+            # Must be true in production to allow the service account to act on
+            # behalf of users; false is for local dev environments without Workspace.
+            echo "GoogleCalendar__EnableImpersonation=true"
+            echo "GoogleDrive__FolderId=${GOOGLE_DRIVE_FOLDER_ID}"
+            # Must always be true in production: the service account only gets
+            # storage quota on Drive when the workspace is set up; OAuth/user-flow
+            # is dev-only and would block non-interactively on the server.
+            echo "GoogleDrive__UseServiceAccount=true"
+          } > "$DEPLOY_DIR/bot.env"
+
+          # Mounted into the container, which runs as a non-root user (APP_UID),
+          # so it must be world-readable. The parent dir (~/uniia-bot, mode 700)
+          # keeps it private from other host users.
+          # Same service-account JSON is reused for Sheets, Calendar and Drive
+          # (one Google Cloud service account with all three APIs enabled).
+          printf '{ "GoogleSheets": { "CredentialsJson": %s }, "GoogleCalendar": { "CredentialsJson": %s }, "GoogleDrive": { "CredentialsJson": %s } }\n' \
+            "${GOOGLE_CREDENTIALS_JSON}" "${GOOGLE_CREDENTIALS_JSON}" "${GOOGLE_CREDENTIALS_JSON}" > "$DEPLOY_DIR/appsettings.Production.json"
+          chmod 0644 "$DEPLOY_DIR/appsettings.Production.json"
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull & start
+        run: |
+          set -euo pipefail
+          cd "$HOME/uniia-bot"
+          docker compose pull
+          docker compose up -d --remove-orphans
+          docker image prune -f

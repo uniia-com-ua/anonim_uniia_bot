@@ -1,6 +1,7 @@
 services:
   bot:
     image: ${BOT_IMAGE}
+    platform: linux/arm64
     restart: unless-stopped
     environment:
       ASPNETCORE_ENVIRONMENT: Production

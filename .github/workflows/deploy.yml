@@ -38,6 +38,21 @@ jobs:
       packages: write
     outputs:
       image: ${{ steps.meta.outputs.image }}
+    # Integration tests boot the real Program, which runs EF migrations on startup.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: uniia_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U test -d uniia_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -54,6 +69,8 @@ jobs:
         run: dotnet build UniiaAnonim.TGBot.slnx -c Release --no-restore
 
       - name: Test
+        env:
+          ConnectionStrings__DefaultConnection: Host=localhost;Port=5432;Database=uniia_test;Username=test;Password=test
         run: dotnet test UniiaAnonim.TGBot.slnx -c Release --no-build --verbosity normal
 
       - name: Compute image name

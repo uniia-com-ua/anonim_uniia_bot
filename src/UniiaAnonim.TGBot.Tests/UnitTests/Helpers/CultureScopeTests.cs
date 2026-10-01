@@ -55,7 +55,9 @@ public class CultureScopeTests
     public void ConstructorWithInvalidCultureThrowsCultureNotFoundException()
     {
         // Arrange
-        const string invalidCultureName = "invalid-culture-name";
+        // ICU on Linux accepts any well-formed BCP-47 tag (e.g. "invalid-culture-name"),
+        // so the name must be syntactically invalid to fail on every platform.
+        const string invalidCultureName = "invalid culture name!";
 
         // Act & Assert
         Assert.Throws<CultureNotFoundException>(() => new CultureScope(invalidCultureName));

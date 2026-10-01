@@ -147,7 +147,7 @@ jobs:
           BOT_IMAGE: ${{ needs.build.outputs.image }}
           BASE_URL: ${{ vars.BASE_URL }}
           DEFAULT_LANGUAGE: ${{ vars.DEFAULT_LANGUAGE }}
-          CONNECTION_STRING: ${{ secrets.CONNECTION_STRING }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
           SYMMETRIC_ENCRYPTION_KEY: ${{ secrets.SYMMETRIC_ENCRYPTION_KEY }}
           HASHING_KEY: ${{ secrets.HASHING_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
@@ -161,17 +161,25 @@ jobs:
 
           cp docker-compose.yml "$DEPLOY_DIR/docker-compose.yml"
 
-          # Variables used only for compose substitution (image tag, tunnel token)
+          # The password is applied only when the pgdata volume is first
+          # initialized; rotating the secret later requires ALTER USER in the DB.
+          POSTGRES_DB=anonim_uniia_bot
+          POSTGRES_USER=anonim_uniia_bot
+
+          # Variables used only for compose substitution
           {
             echo "BOT_IMAGE=${BOT_IMAGE}"
             echo "TUNNEL_TOKEN=${TUNNEL_TOKEN}"
+            echo "POSTGRES_DB=${POSTGRES_DB}"
+            echo "POSTGRES_USER=${POSTGRES_USER}"
+            echo "POSTGRES_PASSWORD=${POSTGRES_PASSWORD}"
           } > "$DEPLOY_DIR/.env"
 
           # Overrides the stubs shipped in the image's appsettings.json.
           # Keys map 1:1 to configuration. To add a new env var, add a single
           # line here — compose needs no changes.
           {
-            echo "ConnectionStrings__DefaultConnection=${CONNECTION_STRING}"
+            echo "ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
             echo "GeneralOptions__BaseUrl=${BASE_URL}"
             echo "GeneralOptions__DefaultLanguage=${DEFAULT_LANGUAGE}"
             echo "GeneralOptions__SymmetricEncryptionKey=${SYMMETRIC_ENCRYPTION_KEY}"

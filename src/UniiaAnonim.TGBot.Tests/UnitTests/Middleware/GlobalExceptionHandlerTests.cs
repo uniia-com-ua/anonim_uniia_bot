@@ -1,9 +1,10 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
 using UniiaAnonim.TGBot.Api.Middleware;
+using UniiaAnonim.TGBot.Shared.Exceptions;
 
 namespace UniiaAnonim.TGBot.Tests.UnitTests.Middleware;
 
@@ -40,6 +41,7 @@ public class GlobalExceptionHandlerTests
     /// <param name="expectedTitle">The expected title in the problem details response.</param>
     /// <returns>A <see cref="Task"/> representing the result of the asynchronous operation.</returns>
     [Theory]
+    [InlineData(typeof(EntityNotFoundException), StatusCodes.Status404NotFound, "Not Found")]
     [InlineData(typeof(ValidationException), StatusCodes.Status400BadRequest, "Bad Request")]
     [InlineData(typeof(ArgumentException), StatusCodes.Status400BadRequest, "Bad Request")]
     [InlineData(typeof(InvalidOperationException), StatusCodes.Status400BadRequest, "Bad Request")]

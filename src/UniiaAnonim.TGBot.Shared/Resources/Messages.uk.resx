@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <root>
   <!-- 
     Microsoft ResX Schema 
@@ -260,5 +260,37 @@
   </data>
   <data name="str0034" xml:space="preserve">
     <value>⚠️ Будь ласка, спочатку прийміть правила, щоб почати писати історію</value>
+  </data>
+  <data name="str0035" xml:space="preserve">
+    <value>{0}
+
+Ця історія була опублікована анонімно. Надіслати свою історію &lt;a href="https://t.me/{1}"&gt;ТУТ&lt;/a&gt;.</value>
+  </data>
+  <data name="str0036" xml:space="preserve">
+    <value>❌ Ваша історія дуже довга. Максимальна допустима довжина 4096 символів.</value>
+  </data>
+  <data name="str0037" xml:space="preserve">
+    <value>⛔ Заблокувати</value>
+  </data>
+  <data name="str0038" xml:space="preserve">
+    <value>⛔ Користувача заблоковано.</value>
+  </data>
+  <data name="str0039" xml:space="preserve">
+    <value>{0}
+
+━━━━━━━━━━━━━━━
+&lt;b&gt;[Статус: ⛔ Заблоковано]&lt;/b&gt;</value>
+  </data>
+  <data name="str0040" xml:space="preserve">
+    <value>❌ Сталася помилка під час блокування.</value>
+  </data>
+  <data name="str0041" xml:space="preserve">
+    <value>🔓 Розблокувати</value>
+  </data>
+  <data name="str0042" xml:space="preserve">
+    <value>🔓 Користувача розблоковано.</value>
+  </data>
+  <data name="str0043" xml:space="preserve">
+    <value>❌ Сталася помилка під час розблокування.</value>
   </data>
 </root>

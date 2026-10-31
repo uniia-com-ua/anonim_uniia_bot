@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.Localization;
+using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Logging;
 using Telegram.Bot;
 using Telegram.Bot.Types;
@@ -13,10 +13,10 @@ using UniiaAnonim.TGBot.Shared.Resources;
 namespace UniiaAnonim.TGBot.Application.Services.Telegram.EventStrategies;
 
 /// <summary>
-/// Defines a strategy that intercepts incoming messages or actions and ensures
+/// Defines a strategy that intercepts incoming private messages and ensures
 /// the user has accepted the rules before proceeding. If not, prompts them to accept.
 /// </summary>
-public sealed class EnsureRulesAcceptedStrategy(
+public sealed partial class EnsureRulesAcceptedStrategy(
     ITelegramBotClient botClient,
     IStoryAuthorService storyAuthorService,
     IStringLocalizer<Messages> localizer,
@@ -37,27 +37,27 @@ public sealed class EnsureRulesAcceptedStrategy(
     /// <inheritdoc/>
     public async Task HandleAsync(Update update, CancellationToken ct = default)
     {
-        var chatId = update.Message?.Chat.Id ?? update.CallbackQuery?.Message?.Chat.Id;
-
-        if (chatId is null)
+        if (update.Message is not { Chat: not null } message)
         {
-            logger.LogWarning("Update {UpdateId} is missing chat context.", update.Id);
+            LogUpdateMissingMessageChatContext(logger, update.Id);
             return;
         }
 
-        var inlineKeyboard = new InlineKeyboardMarkup(
-            InlineKeyboardButton.WithCallbackData(localizer["str0032"], ButtonPrefixes.AcceptRulesPrefix));
+        var inlineKeyboard = new InlineKeyboardMarkup([
+            [InlineKeyboardButton.WithCallbackData(localizer["str0032"], ButtonPrefixes.AcceptRulesPrefix)]
+        ]);
 
         await botClient.SendMessage(
-            chatId: chatId.Value,
+            chatId: message.Chat.Id,
             text: localizer["str0034"].UnescapedValue(),
             parseMode: ParseMode.Html,
             replyMarkup: inlineKeyboard,
             cancellationToken: ct);
-
-        if (update.CallbackQuery is not null)
-        {
-            await botClient.AnswerCallbackQuery(update.CallbackQuery.Id, cancellationToken: ct);
-        }
     }
+
+    [LoggerMessage(
+        EventId = LogEventIds.UpdateMissingMessageChatContext,
+        Level = LogLevel.Warning,
+        Message = "Update {UpdateId} is missing message chat context.")]
+    private static partial void LogUpdateMissingMessageChatContext(ILogger logger, int updateId);
 }

@@ -1,8 +1,10 @@
-﻿using Microsoft.Extensions.Localization;
+using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Logging;
 using Telegram.Bot;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
+using UniiaAnonim.TGBot.Application.Extensions;
 using UniiaAnonim.TGBot.Application.Interfaces.StoryAuthor;
 using UniiaAnonim.TGBot.Application.Interfaces.Telegram;
 using UniiaAnonim.TGBot.Domain.Interfaces.Repositories;
@@ -17,12 +19,13 @@ namespace UniiaAnonim.TGBot.Application.Services.Telegram.EventStrategies;
 /// Defines a strategy for handling the immediate publication of a story by an administrator.
 /// Forwards the clean story content to the main public channel and updates the queue.
 /// </summary>
-public sealed class PublishStoryStrategy(
+public sealed partial class PublishStoryStrategy(
     ITelegramBotClient botClient,
     IStoryAuthorService storyAuthorService,
     ITelegramMediaProcessor telegramMediaProcessor,
     IChannelRepository channelRepository,
     IStringLocalizer<Messages> localizer,
+    IMemoryCache memoryCache,
     ILogger<PublishStoryStrategy> logger)
     : ITelegramUpdateStrategy
 {
@@ -40,19 +43,19 @@ public sealed class PublishStoryStrategy(
     public async Task HandleAsync(Update update, CancellationToken ct = default)
     {
         var callbackQuery = update.CallbackQuery;
-        var message = callbackQuery.Message;
+        var message = callbackQuery?.Message;
 
-        if (message is null)
+        if (callbackQuery is null || message is null)
         {
-            logger.LogWarning("Callback query {CallbackQueryId} is missing message context.", callbackQuery.Id);
+            LogCallbackQueryMessageContextMissing(logger);
             return;
         }
 
-        var storyIdString = callbackQuery.Data[ButtonPrefixes.AdminPublishStoryPrefix.Length..];
+        var storyIdString = callbackQuery.Data?[ButtonPrefixes.AdminPublishStoryPrefix.Length..];
 
         if (!Guid.TryParse(storyIdString, out var storyId))
         {
-            logger.LogWarning("Invalid story ID format in callback data: {CallbackData}", callbackQuery.Data);
+            LogInvalidStoryIdFormat(logger, callbackQuery.Data);
             await botClient.AnswerCallbackQuery(callbackQuery.Id, localizer["str0007"], cancellationToken: ct);
             return;
         }
@@ -62,7 +65,7 @@ public sealed class PublishStoryStrategy(
             var targetChannel = await channelRepository.GetByTypeAsync(ChannelType.PublicChannel, ct);
             if (targetChannel is null)
             {
-                logger.LogWarning("Public channel is not configured in the database. Cannot publish story {StoryId}.", storyId);
+                LogPublicChannelNotConfigured(logger, storyId);
                 await botClient.AnswerCallbackQuery(callbackQuery.Id, localizer["str0015"], showAlert: true, cancellationToken: ct);
                 return;
             }
@@ -70,29 +73,21 @@ public sealed class PublishStoryStrategy(
             var authorTelegramId = await storyAuthorService.GetDecryptedTelegramIdAsync(storyId, ct);
             var storyEntity = await storyAuthorService.GetAsync(storyId, ct);
 
-            await storyAuthorService.SetStatusAsync(storyId, StoryStatus.Published, ct);
-
             var originalContent = message.Text ?? message.Caption ?? string.Empty;
-            var cleanStoryContent = ExtractStoryContent(originalContent);
+            var cleanStoryContent = await ModifyStoryContentAsync(originalContent, ct);
 
             if (storyEntity?.MediaFiles is { Count: > 0 })
             {
-                await SendMediaGroupStoryAsync(targetChannel.ChannelId, storyEntity.MediaFiles, cleanStoryContent, ct);
+                await DeliverStoryMediaAsync(targetChannel.ChannelId, storyEntity.MediaFiles, cleanStoryContent, ct);
             }
             else if (message.Type != MessageType.Text)
             {
-                await botClient.EditMessageCaption(
-                    chatId: message.Chat.Id,
-                    messageId: message.MessageId,
-                    caption: cleanStoryContent,
-                    parseMode: ParseMode.Html,
-                    replyMarkup: null,
-                    cancellationToken: ct);
-
                 await botClient.CopyMessage(
                     chatId: targetChannel.ChannelId,
                     fromChatId: message.Chat.Id,
                     messageId: message.MessageId,
+                    caption: cleanStoryContent,
+                    parseMode: ParseMode.Html,
                     cancellationToken: ct);
             }
             else
@@ -100,57 +95,73 @@ public sealed class PublishStoryStrategy(
                 await botClient.SendMessage(
                     chatId: targetChannel.ChannelId,
                     text: cleanStoryContent,
+                    parseMode: ParseMode.Html,
                     cancellationToken: ct);
             }
 
             await botClient.SendMessage(
                 chatId: authorTelegramId,
-                text: localizer["str0014"],
+                text: localizer["str0014"].UnescapedValue(),
                 parseMode: ParseMode.Html,
                 cancellationToken: ct);
 
-            if (!string.IsNullOrEmpty(message.Text))
+            var originalAdminText = message.Text ?? message.Caption;
+            if (!string.IsNullOrEmpty(originalAdminText))
             {
-                await botClient.EditMessageText(
-                    chatId: message.Chat.Id,
-                    messageId: message.MessageId,
-                    text: localizer["str0012", message.Text].UnescapedValue(),
-                    parseMode: ParseMode.Html,
-                    replyMarkup: null,
-                    cancellationToken: ct);
-            }
-            else if (!string.IsNullOrEmpty(message.Caption))
-            {
-                await botClient.EditMessageCaption(
-                    chatId: message.Chat.Id,
-                    messageId: message.MessageId,
-                    caption: localizer["str0012", message.Caption].UnescapedValue(),
-                    parseMode: ParseMode.Html,
-                    replyMarkup: null,
-                    cancellationToken: ct);
+                var formattedText = localizer["str0012", originalAdminText.EscapeTelegramHtml()].UnescapedValue();
+                await botClient.SafeEditMessageOrCaptionAsync(message.Chat.Id, message.MessageId, formattedText, ct: ct);
             }
 
             await botClient.AnswerCallbackQuery(
                 callbackQueryId: callbackQuery.Id,
                 text: localizer["str0013"],
                 cancellationToken: ct);
+
+            await storyAuthorService.SetStatusAsync(storyId, StoryStatus.Published, ct);
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Error occurred while publishing story {StoryId}.", storyId);
+            LogPublishStoryFailed(logger, ex, storyId);
             await botClient.AnswerCallbackQuery(callbackQuery.Id, localizer["str0015"], showAlert: true, cancellationToken: ct);
         }
     }
 
-    private async Task SendMediaGroupStoryAsync(long targetChatId, Dictionary<string, StoryMediaType> mediaFiles, string cleanContent, CancellationToken ct)
+    private async Task DeliverStoryMediaAsync(
+        long targetChatId,
+        Dictionary<string, StoryMediaType> mediaFiles,
+        string cleanContent,
+        CancellationToken ct)
     {
         var isLongText = cleanContent.Length > MaxCaptionLength;
+
+        if (mediaFiles.Count == 1)
+        {
+            var single = mediaFiles.First();
+            var inputFile = InputFile.FromFileId(single.Key);
+
+            if (isLongText)
+            {
+                var mediaMessage = await SendSingleMediaAsync(targetChatId, single.Value, inputFile, caption: null, ct);
+                await botClient.SendMessage(
+                    chatId: targetChatId,
+                    text: cleanContent,
+                    parseMode: ParseMode.Html,
+                    replyParameters: new ReplyParameters { MessageId = mediaMessage.MessageId },
+                    cancellationToken: ct);
+            }
+            else
+            {
+                await SendSingleMediaAsync(targetChatId, single.Value, inputFile, caption: cleanContent, ct);
+            }
+
+            return;
+        }
 
         var mediaGroup = telegramMediaProcessor.ConvertToAlbumMedia(mediaFiles, isLongText ? null : cleanContent);
 
         if (isLongText)
         {
-            var mediaMessage = await botClient.SendMediaGroup(
+            var mediaMessages = await botClient.SendMediaGroup(
                 chatId: targetChatId,
                 media: mediaGroup,
                 cancellationToken: ct);
@@ -159,7 +170,7 @@ public sealed class PublishStoryStrategy(
                 chatId: targetChatId,
                 text: cleanContent,
                 parseMode: ParseMode.Html,
-                replyParameters: new ReplyParameters { MessageId = mediaMessage[0].Id },
+                replyParameters: new ReplyParameters { MessageId = mediaMessages[0].MessageId },
                 cancellationToken: ct);
         }
         else
@@ -171,10 +182,28 @@ public sealed class PublishStoryStrategy(
         }
     }
 
+    private Task<Message> SendSingleMediaAsync(
+        long chatId,
+        StoryMediaType mediaType,
+        InputFile file,
+        string? caption,
+        CancellationToken ct)
+    {
+        var parseMode = caption is not null ? ParseMode.Html : ParseMode.None;
+
+        return mediaType switch
+        {
+            StoryMediaType.Photo => botClient.SendPhoto(chatId, file, caption: caption, parseMode: parseMode, cancellationToken: ct),
+            StoryMediaType.Video => botClient.SendVideo(chatId, file, caption: caption, parseMode: parseMode, cancellationToken: ct),
+            StoryMediaType.Document => botClient.SendDocument(chatId, file, caption: caption, parseMode: parseMode, cancellationToken: ct),
+            _ => throw new ArgumentOutOfRangeException(nameof(mediaType), mediaType, "Unsupported media type."),
+        };
+    }
+
     /// <summary>
-    /// Extracts the actual story text from the admin message format by locating the marker.
+    /// Extracts and modifies the story content from the full text, removing any markers and adding bot information.
     /// </summary>
-    private static string ExtractStoryContent(string fullText)
+    private async Task<string> ModifyStoryContentAsync(string fullText, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(fullText))
         {
@@ -182,7 +211,40 @@ public sealed class PublishStoryStrategy(
         }
 
         var index = fullText.IndexOf(MessageMarkers.StoryMarker, StringComparison.Ordinal);
+        var story = index >= 0 ? fullText[(index + MessageMarkers.StoryMarker.Length)..].Trim() : fullText;
 
-        return index >= 0 ? fullText[(index + MessageMarkers.StoryMarker.Length)..].Trim() : fullText;
+        const string cacheKey = "tg_bot_username";
+        if (!memoryCache.TryGetValue(cacheKey, out string? botUsername) || botUsername is null)
+        {
+            var me = await botClient.GetMe(ct);
+            botUsername = me.Username ?? string.Empty;
+            memoryCache.Set(cacheKey, botUsername, TimeSpan.FromHours(24));
+        }
+
+        return localizer["str0035", story.EscapeTelegramHtml(), botUsername].UnescapedValue();
     }
+
+    [LoggerMessage(
+        EventId = LogEventIds.CallbackQueryMessageContextMissing,
+        Level = LogLevel.Warning,
+        Message = "Callback query is missing message context.")]
+    private static partial void LogCallbackQueryMessageContextMissing(ILogger logger);
+
+    [LoggerMessage(
+        EventId = LogEventIds.InvalidStoryIdFormat,
+        Level = LogLevel.Warning,
+        Message = "Invalid story ID format in callback data: {CallbackData}")]
+    private static partial void LogInvalidStoryIdFormat(ILogger logger, string? callbackData);
+
+    [LoggerMessage(
+        EventId = LogEventIds.PublicChannelNotConfigured,
+        Level = LogLevel.Warning,
+        Message = "Public channel is not configured in the database. Cannot publish story {StoryId}.")]
+    private static partial void LogPublicChannelNotConfigured(ILogger logger, Guid storyId);
+
+    [LoggerMessage(
+        EventId = LogEventIds.PublishStoryFailed,
+        Level = LogLevel.Error,
+        Message = "Error occurred while publishing story {StoryId}.")]
+    private static partial void LogPublishStoryFailed(ILogger logger, Exception exception, Guid storyId);
 }

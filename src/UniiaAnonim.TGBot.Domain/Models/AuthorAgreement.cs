@@ -1,4 +1,4 @@
-﻿namespace UniiaAnonim.TGBot.Domain.Models;
+namespace UniiaAnonim.TGBot.Domain.Models;
 
 /// <summary>
 /// Represents a story author entity in the domain model.
@@ -9,7 +9,7 @@ public class AuthorAgreement
     /// <summary>
     /// Gets or sets the hash of the author identifier.
     /// </summary>
-    public string AuthorIdHash { get; set; }
+    public string AuthorIdHash { get; set; } = string.Empty;
 
     /// <summary>
     /// Gets or sets a value indicating whether the user has accepted the rules.

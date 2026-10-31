@@ -1,4 +1,4 @@
-﻿using UniiaAnonim.TGBot.Domain.Models;
+using UniiaAnonim.TGBot.Domain.Models;
 using UniiaAnonim.TGBot.Shared.Dtos.StoryAuthor;
 using UniiaAnonim.TGBot.Shared.Enums;
 using UniiaAnonim.TGBot.Shared.Exceptions;
@@ -86,4 +86,13 @@ public interface IStoryAuthorRepository
     /// <returns>The story author entity with its associated message entities.</returns>
     /// <exception cref="EntityNotFoundException">Thrown if the entity with the specified ID is not found.</exception>
     Task<StoryAuthor> GetWithMessagesAsync(Guid id, CancellationToken ct = default);
+
+    /// <summary>
+    /// Asynchronously retrieves the encrypted author identifier for the specified story ID using an optimized non-tracking projection.
+    /// </summary>
+    /// <param name="id">The unique identifier of the story author.</param>
+    /// <param name="ct">A token to monitor for cancellation requests.</param>
+    /// <returns>The encrypted author identifier string.</returns>
+    /// <exception cref="EntityNotFoundException">Thrown if the entity with the specified ID is not found.</exception>
+    Task<string> GetEncryptedAuthorIdAsync(Guid id, CancellationToken ct = default);
 }

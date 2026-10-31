@@ -1,4 +1,4 @@
-﻿using System.Threading.Channels;
+using System.Threading.Channels;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -48,6 +48,7 @@ public class InfrastructureServiceExtensionsTests
         Assert.NotNull(serviceProvider.GetService<AppDbContext>());
         Assert.NotNull(serviceProvider.GetService<IStoryAuthorRepository>());
         Assert.NotNull(serviceProvider.GetService<IChannelRepository>());
+        Assert.NotNull(serviceProvider.GetService<IBannedUserRepository>());
 
         // Assert - Security
         Assert.NotNull(serviceProvider.GetService<ISymmetricEncryptionService>());

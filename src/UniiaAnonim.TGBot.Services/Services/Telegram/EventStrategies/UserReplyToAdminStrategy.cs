@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.Localization;
+using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Logging;
 using Telegram.Bot;
 using Telegram.Bot.Types;
@@ -6,7 +6,9 @@ using Telegram.Bot.Types.Enums;
 using UniiaAnonim.TGBot.Application.Interfaces.StoryAuthor;
 using UniiaAnonim.TGBot.Application.Interfaces.Telegram;
 using UniiaAnonim.TGBot.Domain.Interfaces.Repositories;
+using UniiaAnonim.TGBot.Shared.Consts;
 using UniiaAnonim.TGBot.Shared.Enums;
+using UniiaAnonim.TGBot.Shared.Extensions;
 using UniiaAnonim.TGBot.Shared.Resources;
 
 namespace UniiaAnonim.TGBot.Application.Services.Telegram.EventStrategies;
@@ -15,7 +17,7 @@ namespace UniiaAnonim.TGBot.Application.Services.Telegram.EventStrategies;
 /// Defines a strategy for handling messages from users who have an active story.
 /// Forwards their messages to the admin channels with the attached story ID.
 /// </summary>
-public sealed class UserReplyToAdminStrategy(
+public sealed partial class UserReplyToAdminStrategy(
     IChannelRepository channelRepository,
     IStoryAuthorService storyAuthorService,
     ITelegramBotClient botClient,
@@ -37,7 +39,11 @@ public sealed class UserReplyToAdminStrategy(
     /// <inheritdoc/>
     public async Task HandleAsync(Update update, CancellationToken ct = default)
     {
-        var message = update.Message;
+        if (update.Message is not { From: not null } message)
+        {
+            return;
+        }
+
         var userId = message.From.Id;
 
         var storyMessageId = await storyAuthorService.GetActualStoryMessageIdAsync(userId, ct);
@@ -45,7 +51,7 @@ public sealed class UserReplyToAdminStrategy(
         var adminChannel = await channelRepository.GetByTypeAsync(ChannelType.AdminChannel, ct);
         if (adminChannel is null)
         {
-            logger.LogWarning("Admin channel not found in the database. Cannot forward user reply.");
+            LogAdminChannelNotFoundForUserReply(logger);
             return;
         }
 
@@ -60,7 +66,7 @@ public sealed class UserReplyToAdminStrategy(
             {
                 await botClient.SendMessage(
                     chatId: adminChannel.ChannelId,
-                    text: localizer["str0006", message.Text],
+                    text: localizer["str0006", message.Text.EscapeTelegramHtml()].UnescapedValue(),
                     parseMode: ParseMode.Html,
                     replyParameters: replyParams,
                     cancellationToken: ct);
@@ -68,8 +74,8 @@ public sealed class UserReplyToAdminStrategy(
             else
             {
                 var caption = !string.IsNullOrEmpty(message.Caption)
-                    ? localizer["str0006", message.Caption]
-                    : (string?)null;
+                    ? localizer["str0006", message.Caption.EscapeTelegramHtml()].UnescapedValue()
+                    : null;
 
                 await botClient.CopyMessage(
                     chatId: adminChannel.ChannelId,
@@ -83,7 +89,19 @@ public sealed class UserReplyToAdminStrategy(
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Failed to send user reply for story message {StoryMessageId} to admin channel {ChannelId}.", storyMessageId, adminChannel.ChannelId);
+            LogSendUserReplyFailed(logger, ex, storyMessageId, adminChannel.ChannelId);
         }
     }
+
+    [LoggerMessage(
+        EventId = LogEventIds.AdminChannelNotFoundForUserReply,
+        Level = LogLevel.Warning,
+        Message = "Admin channel not found in the database. Cannot forward user reply.")]
+    private static partial void LogAdminChannelNotFoundForUserReply(ILogger logger);
+
+    [LoggerMessage(
+        EventId = LogEventIds.SendUserReplyFailed,
+        Level = LogLevel.Error,
+        Message = "Failed to send user reply for story message {StoryMessageId} to admin channel {ChannelId}.")]
+    private static partial void LogSendUserReplyFailed(ILogger logger, Exception exception, int storyMessageId, long channelId);
 }

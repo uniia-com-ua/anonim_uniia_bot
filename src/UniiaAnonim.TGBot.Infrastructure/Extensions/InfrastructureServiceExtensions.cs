@@ -1,4 +1,4 @@
-﻿using System.Threading.Channels;
+using System.Threading.Channels;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -49,7 +49,7 @@ public static class InfrastructureServiceExtensions
     /// <returns>The original <see cref="IServiceProvider"/> instance for chaining.</returns>
     public static async Task<IServiceProvider> UseInfrastructureDatabaseAsync(this IServiceProvider app)
     {
-        using var scope = app.CreateScope();
+        await using var scope = app.CreateAsyncScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
         await dbContext.Database.MigrateAsync();
@@ -100,8 +100,8 @@ public static class InfrastructureServiceExtensions
     private static IServiceCollection AddSecurity(this IServiceCollection services)
     {
         services
-            .AddScoped<ISymmetricEncryptionService, AesEncryptionService>()
-            .AddScoped<IHashService, Sha256HashService>();
+            .AddSingleton<ISymmetricEncryptionService, AesEncryptionService>()
+            .AddSingleton<IHashService, Sha256HashService>();
 
         return services;
     }
@@ -127,7 +127,8 @@ public static class InfrastructureServiceExtensions
         services
             .AddScoped<IStoryAuthorRepository, StoryAuthorRepository>()
             .AddScoped<IChannelRepository, ChannelRepository>()
-            .AddScoped<IAuthorAgreementRepository, AuthorAgreementRepository>();
+            .AddScoped<IAuthorAgreementRepository, AuthorAgreementRepository>()
+            .AddScoped<IBannedUserRepository, BannedUserRepository>();
 
         return services;
     }

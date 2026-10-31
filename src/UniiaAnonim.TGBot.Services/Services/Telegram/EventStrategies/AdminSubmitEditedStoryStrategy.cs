@@ -1,10 +1,11 @@
-﻿using System.Text.RegularExpressions;
+using System.Globalization;
 using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Logging;
 using Telegram.Bot;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
 using Telegram.Bot.Types.ReplyMarkups;
+using UniiaAnonim.TGBot.Application.Interfaces.Security;
 using UniiaAnonim.TGBot.Application.Interfaces.StoryAuthor;
 using UniiaAnonim.TGBot.Application.Interfaces.Telegram;
 using UniiaAnonim.TGBot.Domain.Interfaces.Repositories;
@@ -23,6 +24,7 @@ public sealed partial class AdminSubmitEditedStoryStrategy(
     IChannelRepository channelRepository,
     IStoryAuthorService storyAuthorService,
     ITelegramBotClient botClient,
+    IHashService hashService,
     IStringLocalizer<Messages> localizer,
     ILogger<AdminSubmitEditedStoryStrategy> logger)
     : ITelegramUpdateStrategy
@@ -39,28 +41,27 @@ public sealed partial class AdminSubmitEditedStoryStrategy(
             return Task.FromResult(false);
         }
 
-        var repliedText = msg.ReplyToMessage.Text ?? msg.ReplyToMessage.Caption;
-
+        var replyText = msg.ReplyToMessage.Text ?? msg.ReplyToMessage.Caption;
         return Task.FromResult(
-            !string.IsNullOrEmpty(repliedText) &&
-            repliedText.Contains(MessageMarkers.EditMarker, StringComparison.Ordinal));
+            !string.IsNullOrWhiteSpace(replyText) &&
+            replyText.Contains(MessageMarkers.EditedHistoryTextMarker, StringComparison.Ordinal));
     }
 
     /// <inheritdoc/>
     public async Task HandleAsync(Update update, CancellationToken ct = default)
     {
         var message = update.Message;
-        var originalText = message.ReplyToMessage?.Text ?? message.ReplyToMessage?.Caption;
+        var replyText = message?.ReplyToMessage?.Text ?? message?.ReplyToMessage?.Caption;
 
-        if (string.IsNullOrWhiteSpace(originalText))
+        if (message is null || string.IsNullOrWhiteSpace(replyText))
         {
             return;
         }
 
-        var match = GuidRegex().Match(originalText);
-        if (!match.Success || !Guid.TryParse(match.Value, out var storyId))
+        var matchEnumerator = CommonRegexes.GuidRegex().EnumerateMatches(replyText);
+        if (!matchEnumerator.MoveNext() || !Guid.TryParse(replyText.AsSpan(matchEnumerator.Current.Index, matchEnumerator.Current.Length), out var storyId))
         {
-            logger.LogDebug("No story ID (Guid) found in the edit prompt.");
+            LogStoryIdNotFoundInEditPrompt(logger);
             return;
         }
 
@@ -69,22 +70,12 @@ public sealed partial class AdminSubmitEditedStoryStrategy(
             return;
         }
 
-        if (!await storyAuthorService.ExistsAsync(storyId, ct))
-        {
-            await botClient.SendMessage(
-                chatId: message.Chat.Id,
-                text: localizer["str0016"],
-                replyParameters: new ReplyParameters { MessageId = message.MessageId },
-                cancellationToken: ct);
-
-            return;
-        }
-
         if (await storyAuthorService.IsInStatusAsync(storyId, StoryStatus.Published, ct))
         {
             await botClient.SendMessage(
                 chatId: message.Chat.Id,
-                text: localizer["str0017"],
+                text: localizer["str0017"].UnescapedValue(),
+                parseMode: ParseMode.Html,
                 replyParameters: new ReplyParameters { MessageId = message.MessageId },
                 cancellationToken: ct);
 
@@ -103,27 +94,34 @@ public sealed partial class AdminSubmitEditedStoryStrategy(
         {
             await botClient.SendMessage(
                 chatId: authorId,
-                text: localizer["str0019", editedText].UnescapedValue(),
+                text: localizer["str0019", editedText.EscapeTelegramHtml()].UnescapedValue(),
                 replyMarkup: keyboard,
                 parseMode: ParseMode.Html,
                 cancellationToken: ct);
 
             await botClient.SendMessage(
                 chatId: message.Chat.Id,
-                text: localizer["str0022"],
+                text: localizer["str0022"].UnescapedValue(),
                 parseMode: ParseMode.Html,
                 replyParameters: new ReplyParameters { MessageId = message.MessageId },
                 cancellationToken: ct);
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Failed to send edited story to user {TelegramId} for story {StoryId}.", authorId, storyId);
+            var authorHash = hashService.ComputeHash(authorId.ToString(CultureInfo.InvariantCulture));
+            LogSendEditedStoryFailed(logger, ex, authorHash, storyId);
         }
     }
 
-    /// <summary>
-    /// Provides a compiled regular expression for extracting a Guid from a text string.
-    /// </summary>
-    [GeneratedRegex(@"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")]
-    private static partial Regex GuidRegex();
+    [LoggerMessage(
+        EventId = LogEventIds.StoryIdNotFoundInEditPrompt,
+        Level = LogLevel.Debug,
+        Message = "No story ID (Guid) found in the edit prompt.")]
+    private static partial void LogStoryIdNotFoundInEditPrompt(ILogger logger);
+
+    [LoggerMessage(
+        EventId = LogEventIds.SendEditedStoryFailed,
+        Level = LogLevel.Error,
+        Message = "Failed to send edited story to user {UserHash} for story {StoryId}.")]
+    private static partial void LogSendEditedStoryFailed(ILogger logger, Exception exception, string userHash, Guid storyId);
 }

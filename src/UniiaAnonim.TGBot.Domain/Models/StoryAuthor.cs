@@ -1,4 +1,4 @@
-﻿using UniiaAnonim.TGBot.Shared.Enums;
+using UniiaAnonim.TGBot.Shared.Enums;
 
 namespace UniiaAnonim.TGBot.Domain.Models;
 
@@ -11,12 +11,12 @@ public class StoryAuthor
     /// <summary>
     /// Gets or sets the author identifier.
     /// </summary>
-    public string AuthorId { get; set; }
+    public string AuthorId { get; set; } = string.Empty;
 
     /// <summary>
     /// Gets or sets the hash of the author identifier.
     /// </summary>
-    public string AuthorIdHash { get; set; }
+    public string AuthorIdHash { get; set; } = string.Empty;
 
     /// <summary>
     /// Gets or sets a value indicating a story status.

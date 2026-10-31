@@ -1,4 +1,4 @@
-﻿using System.Net.Mime;
+using System.Net.Mime;
 using System.Text.Json;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 
@@ -38,6 +38,6 @@ public static class HealthCheckResponseWriter
             }),
         };
 
-        await JsonSerializer.SerializeAsync(context.Response.Body, response, SerializerOptions);
+        await JsonSerializer.SerializeAsync(context.Response.Body, response, SerializerOptions, context.RequestAborted);
     }
 }

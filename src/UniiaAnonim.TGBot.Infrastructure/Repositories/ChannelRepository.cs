@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using UniiaAnonim.TGBot.Domain.Interfaces.Repositories;
 using UniiaAnonim.TGBot.Domain.Models;
 using UniiaAnonim.TGBot.Infrastructure.Persistence;
@@ -6,7 +6,7 @@ using UniiaAnonim.TGBot.Shared.Enums;
 
 namespace UniiaAnonim.TGBot.Infrastructure.Repositories;
 
-internal class ChannelRepository(AppDbContext appDbContext)
+public sealed class ChannelRepository(AppDbContext appDbContext)
     : GenericRepository<Channel>(appDbContext),
     IChannelRepository
 {
@@ -42,9 +42,13 @@ internal class ChannelRepository(AppDbContext appDbContext)
     /// </summary>
     /// <param name="channelId">The unique identifier of the channel to delete.</param>
     /// <param name="ct">A token to monitor for cancellation requests.</param>
-    /// <returns>A task that represents the asynchronous deletion operation.</returns>
-    public async Task DeleteByChannelIdAsync(long channelId, CancellationToken ct = default)
-        => await DbSet
-                .Where(x => x.ChannelId == channelId)
-                .ExecuteDeleteAsync(ct);
+    /// <returns>A task that represents the asynchronous deletion operation, returning <see langword="true"/> if a channel was deleted; otherwise, <see langword="false"/>.</returns>
+    public async Task<bool> DeleteByChannelIdAsync(long channelId, CancellationToken ct = default)
+    {
+        var rowsDeleted = await DbSet
+            .Where(x => x.ChannelId == channelId)
+            .ExecuteDeleteAsync(ct);
+
+        return rowsDeleted > 0;
+    }
 }

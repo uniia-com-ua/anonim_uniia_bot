@@ -1,13 +1,15 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
+using UniiaAnonim.TGBot.Shared.Consts;
+using UniiaAnonim.TGBot.Shared.Exceptions;
 
 namespace UniiaAnonim.TGBot.Api.Middleware;
 
 /// <summary>
 /// Handles global exceptions and writes problem details responses.
 /// </summary>
-public sealed class GlobalExceptionHandler(
+public sealed partial class GlobalExceptionHandler(
     IProblemDetailsService problemDetailsService,
     ILogger<GlobalExceptionHandler> logger,
     IWebHostEnvironment env)
@@ -30,13 +32,15 @@ public sealed class GlobalExceptionHandler(
         ArgumentNullException.ThrowIfNull(httpContext);
         ArgumentNullException.ThrowIfNull(exception);
 
-        var statusCode = exception switch
+        var (statusCode, title) = exception switch
         {
+            EntityNotFoundException => (StatusCodes.Status404NotFound, "Not Found"),
+            StoryTooLongException or
             ValidationException or
             ArgumentException or
             NotSupportedException or
-            InvalidOperationException => StatusCodes.Status400BadRequest,
-            _ => StatusCodes.Status500InternalServerError,
+            InvalidOperationException => (StatusCodes.Status400BadRequest, "Bad Request"),
+            _ => (StatusCodes.Status500InternalServerError, "Internal Server Error"),
         };
 
         httpContext.Response.StatusCode = statusCode;
@@ -45,19 +49,11 @@ public sealed class GlobalExceptionHandler(
 
         if (isClientError)
         {
-            logger.LogWarning(
-                exception,
-                "A client error occurred while processing the request. Type: {ExceptionType}, Message: {Message}",
-                exception.GetType().Name,
-                exception.Message);
+            LogClientErrorOccurred(logger, exception, exception.GetType().Name, exception.Message);
         }
         else
         {
-            logger.LogError(
-                exception,
-                "An unhandled server exception occurred while processing the request. Type: {ExceptionType}, Message: {Message}",
-                exception.GetType().Name,
-                exception.Message);
+            LogUnhandledServerExceptionOccurred(logger, exception, exception.GetType().Name, exception.Message);
         }
 
         var isDev = env.IsDevelopment();
@@ -71,7 +67,7 @@ public sealed class GlobalExceptionHandler(
         var problemDetails = new ProblemDetails
         {
             Type = type,
-            Title = isClientError ? "Bad Request" : "Internal Server Error",
+            Title = title,
             Detail = detail,
             Status = statusCode,
             Instance = httpContext.Request.Path,
@@ -96,4 +92,16 @@ public sealed class GlobalExceptionHandler(
 
     private static string GetProductionProblemType(bool isClientError)
         => isClientError ? "https://tools.ietf.org/html/rfc7231#section-6.5.1" : "https://tools.ietf.org/html/rfc7231#section-6.6.1";
+
+    [LoggerMessage(
+        EventId = LogEventIds.ClientErrorOccurred,
+        Level = LogLevel.Warning,
+        Message = "A client error occurred while processing the request. Type: {ExceptionType}, Message: {Message}")]
+    private static partial void LogClientErrorOccurred(ILogger logger, Exception exception, string exceptionType, string message);
+
+    [LoggerMessage(
+        EventId = LogEventIds.UnhandledServerExceptionOccurred,
+        Level = LogLevel.Error,
+        Message = "An unhandled server exception occurred while processing the request. Type: {ExceptionType}, Message: {Message}")]
+    private static partial void LogUnhandledServerExceptionOccurred(ILogger logger, Exception exception, string exceptionType, string message);
 }

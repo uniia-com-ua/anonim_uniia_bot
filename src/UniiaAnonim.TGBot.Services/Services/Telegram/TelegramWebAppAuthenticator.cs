@@ -1,4 +1,5 @@
-﻿using System.Security.Cryptography;
+using System.Buffers;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Web;
@@ -12,7 +13,7 @@ namespace UniiaAnonim.TGBot.Application.Services.Telegram;
 /// Implements cryptographic validation for Telegram Web App initialization data (<c>initData</c>)
 /// and extracts the authenticated Telegram user ID according to official Telegram specifications.
 /// </summary>
-public class TelegramWebAppAuthenticator(
+public sealed class TelegramWebAppAuthenticator(
     IOptions<TelegramBotOptions> options)
     : ITelegramWebAppAuthenticator
 {
@@ -36,25 +37,38 @@ public class TelegramWebAppAuthenticator(
         var receivedHash = queryCollection[HashKey];
         var userJson = queryCollection[UserKey];
 
-        if (string.IsNullOrEmpty(receivedHash) || string.IsNullOrEmpty(userJson))
+        if (string.IsNullOrEmpty(receivedHash) || string.IsNullOrEmpty(userJson) || receivedHash.Length != 64)
         {
             return false;
         }
 
         var dataCheckString = BuildDataCheckString(queryCollection);
-        var generatedHash = ComputeSignatureHash(dataCheckString);
+        Span<byte> generatedHashBytes = stackalloc byte[32];
+        ComputeSignatureHash(dataCheckString, generatedHashBytes);
 
-        return VerifyHashesMatch(generatedHash, receivedHash) && TryExtractUserId(userJson, out telegramUserId);
+        Span<byte> receivedHashBytes = stackalloc byte[32];
+        try
+        {
+            Convert.FromHexString(receivedHash.AsSpan(), receivedHashBytes, out _, out int written);
+            if (written != 32)
+            {
+                return false;
+            }
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
+
+        return CryptographicOperations.FixedTimeEquals(generatedHashBytes, receivedHashBytes)
+            && TryExtractUserId(userJson, out telegramUserId);
     }
 
     /// <summary>
     /// Computes the HMAC-SHA-256 secret key once during initialization.
     /// </summary>
-    private static byte[] ComputeSecretKey(string botToken)
-    {
-        using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(WebAppDataSourceKey));
-        return hmac.ComputeHash(Encoding.UTF8.GetBytes(botToken));
-    }
+    private static byte[] ComputeSecretKey(string botToken) =>
+        HMACSHA256.HashData(Encoding.UTF8.GetBytes(WebAppDataSourceKey), Encoding.UTF8.GetBytes(botToken));
 
     /// <summary>
     /// Parses the JSON user object to extract the Telegram User ID.
@@ -73,7 +87,7 @@ public class TelegramWebAppAuthenticator(
         }
         catch (JsonException)
         {
-            // Ignored, parsing failed (invalid JSON format)
+            // Parsing failed (invalid JSON format)
         }
 
         return false;
@@ -81,39 +95,66 @@ public class TelegramWebAppAuthenticator(
 
     /// <summary>
     /// Parses query parameters, excludes the hash field, sorts them alphabetically,
-    /// and formats them into a newline-separated check string.
+    /// and formats them into a newline-separated check string without heavy LINQ chains.
     /// </summary>
     private static string BuildDataCheckString(System.Collections.Specialized.NameValueCollection queryCollection)
     {
-        var formattedParams = queryCollection.AllKeys
-                .Where(key => key is not null and not HashKey)
-                .OrderBy(key => key, StringComparer.Ordinal)
-                .Select(key => $"{key}={queryCollection[key]}");
+        var keys = queryCollection.AllKeys;
+        if (keys is null || keys.Length == 0)
+        {
+            return string.Empty;
+        }
 
-        return string.Join("\n", formattedParams);
+        var sortedKeys = new List<string>(keys.Length);
+        foreach (var key in keys)
+        {
+            if (key is not null && !string.Equals(key, HashKey, StringComparison.Ordinal))
+            {
+                sortedKeys.Add(key);
+            }
+        }
+
+        sortedKeys.Sort(StringComparer.Ordinal);
+
+        var sb = new StringBuilder(sortedKeys.Count * 32);
+        for (int i = 0; i < sortedKeys.Count; i++)
+        {
+            if (i > 0)
+            {
+                sb.Append('\n');
+            }
+
+            var key = sortedKeys[i];
+            sb.Append(key).Append('=').Append(queryCollection[key]);
+        }
+
+        return sb.ToString();
     }
 
     /// <summary>
     /// Computes the HMAC-SHA-256 signature for the data check string using the precomputed secret key.
     /// </summary>
-    private string ComputeSignatureHash(string dataCheckString)
+    private void ComputeSignatureHash(string dataCheckString, Span<byte> destination)
     {
-        byte[] generatedHashBytes;
-        using (var hmac = new HMACSHA256(_secretKey))
+        int maxBytes = Encoding.UTF8.GetMaxByteCount(dataCheckString.Length);
+        if (maxBytes <= 512)
         {
-            generatedHashBytes = hmac.ComputeHash(Encoding.UTF8.GetBytes(dataCheckString));
+            Span<byte> dataBytes = stackalloc byte[maxBytes];
+            int written = Encoding.UTF8.GetBytes(dataCheckString, dataBytes);
+            HMACSHA256.HashData(_secretKey, dataBytes[..written], destination);
         }
-
-        return Convert.ToHexString(generatedHashBytes).ToLowerInvariant();
-    }
-
-    /// <summary>
-    /// Safely compares the generated hash with the received hash in constant time to prevent timing attacks.
-    /// </summary>
-    private static bool VerifyHashesMatch(string generatedHash, string receivedHash)
-    {
-        return CryptographicOperations.FixedTimeEquals(
-            Encoding.UTF8.GetBytes(generatedHash),
-            Encoding.UTF8.GetBytes(receivedHash.ToLowerInvariant()));
+        else
+        {
+            byte[] rented = ArrayPool<byte>.Shared.Rent(maxBytes);
+            try
+            {
+                int written = Encoding.UTF8.GetBytes(dataCheckString, rented);
+                HMACSHA256.HashData(_secretKey, rented.AsSpan(0, written), destination);
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(rented);
+            }
+        }
     }
 }

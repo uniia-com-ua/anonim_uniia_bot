@@ -1,4 +1,4 @@
-﻿using UniiaAnonim.TGBot.Domain.Models;
+using UniiaAnonim.TGBot.Domain.Models;
 using UniiaAnonim.TGBot.Shared.Enums;
 
 namespace UniiaAnonim.TGBot.Domain.Interfaces.Repositories;
@@ -32,6 +32,8 @@ public interface IChannelRepository
     /// </summary>
     /// <param name="channelId">The unique identifier of the channel to delete.</param>
     /// <param name="ct">A token to monitor for cancellation requests.</param>
-    /// <returns>A task that represents the asynchronous deletion operation.</returns>
-    Task DeleteByChannelIdAsync(long channelId, CancellationToken ct = default);
+    /// <returns>
+    /// A task that represents the asynchronous deletion operation. Returns <see langword="true"/> if the channel was deleted; otherwise, <see langword="false"/>.
+    /// </returns>
+    Task<bool> DeleteByChannelIdAsync(long channelId, CancellationToken ct = default);
 }

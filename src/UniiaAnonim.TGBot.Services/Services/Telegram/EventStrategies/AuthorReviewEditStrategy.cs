@@ -1,9 +1,9 @@
-﻿using Microsoft.Extensions.Localization;
+using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Logging;
 using Telegram.Bot;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
-using Telegram.Bot.Types.ReplyMarkups;
+using UniiaAnonim.TGBot.Application.Extensions;
 using UniiaAnonim.TGBot.Application.Interfaces.StoryAuthor;
 using UniiaAnonim.TGBot.Application.Interfaces.Telegram;
 using UniiaAnonim.TGBot.Domain.Interfaces.Repositories;
@@ -18,9 +18,9 @@ namespace UniiaAnonim.TGBot.Application.Services.Telegram.EventStrategies;
 /// Defines a strategy for handling the author's decision regarding an edited story.
 /// Processes the approval or rejection callback and updates the original admin message.
 /// </summary>
-public sealed class AuthorReviewEditStrategy(
+public sealed partial class AuthorReviewEditStrategy(
     ITelegramBotClient botClient,
-    IStoryAuthorRepository storyAuthorRepository,
+    IStoryAuthorService storyAuthorService,
     IChannelRepository channelRepository,
     IAdminActionKeyboardFactory keyboardFactory,
     IStringLocalizer<Messages> localizer,
@@ -39,40 +39,46 @@ public sealed class AuthorReviewEditStrategy(
     /// <inheritdoc/>
     public async Task HandleAsync(Update update, CancellationToken ct = default)
     {
-        var callback = update.CallbackQuery!;
-        var message = callback.Message;
+        var callback = update.CallbackQuery;
+        var message = callback?.Message;
 
-        if (!TryExtractCallbackData(callback.Data!, out var isApproved, out var storyId))
+        if (callback is null || message is null)
         {
-            logger.LogWarning("Invalid story ID format in callback data: {CallbackData}", callback.Data);
+            LogCallbackQueryMissingContext(logger);
             return;
         }
 
-        await RemoveInlineKeyboardAsync(message!, ct);
+        if (!TryExtractCallbackData(callback.Data!, out var isApproved, out var storyId))
+        {
+            LogInvalidStoryIdFormat(logger, callback.Data);
+            return;
+        }
+
+        await RemoveInlineKeyboardAsync(message, ct);
 
         var adminChat = await channelRepository.GetByTypeAsync(ChannelType.AdminChannel, ct);
         if (adminChat is null)
         {
-            logger.LogWarning("Admin channel not found in the database. Cannot update message.");
+            LogAdminChannelNotFoundForUpdateMessage(logger);
             return;
         }
 
-        var storyAuthor = await storyAuthorRepository.GetAsync(storyId, ct);
-        if (storyAuthor is null || storyAuthor.ChannelMessageId == default)
+        var messageIds = await storyAuthorService.GetAsync(storyId, ct);
+        if (messageIds.InteractiveMessageId == default)
         {
-            logger.LogWarning("Story author or MessageId not found for story ID {StoryId}.", storyId);
+            LogStoryAuthorOrMessageNotFound(logger, storyId);
             return;
         }
 
-        var updatedText = ExtractStoryContent(message?.Text ?? message?.Caption ?? string.Empty);
+        var updatedText = ExtractStoryContent(message.Text ?? message.Caption ?? string.Empty);
 
         if (isApproved)
         {
-            await ProcessApprovalAsync(callback.Id, storyId, storyAuthor.ChannelMessageId, adminChat.ChannelId, updatedText, ct);
+            await ProcessApprovalAsync(callback.Id, storyId, messageIds.InteractiveMessageId, adminChat.ChannelId, updatedText, ct);
         }
         else
         {
-            await ProcessRejectionAsync(message.Chat.Id, storyAuthor.ChannelMessageId, adminChat.ChannelId, ct);
+            await ProcessRejectionAsync(message.Chat.Id, messageIds.InteractiveMessageId, adminChat.ChannelId, ct);
         }
     }
 
@@ -107,8 +113,8 @@ public sealed class AuthorReviewEditStrategy(
             parseMode: ParseMode.Html,
             cancellationToken: ct);
 
-        var messageText = localizer["str0004", storyId, updatedText];
-        await SafeEditMessageOrCaptionAsync(adminChatId, adminMessageId, adminKeyboard, messageText, ct);
+        var messageText = localizer["str0004", storyId, updatedText.EscapeTelegramHtml()].UnescapedValue();
+        await botClient.SafeEditMessageOrCaptionAsync(adminChatId, adminMessageId, messageText, adminKeyboard, ct: ct);
     }
 
     private async Task ProcessRejectionAsync(long userChatId, int adminMessageId, long adminChatId, CancellationToken ct)
@@ -128,33 +134,6 @@ public sealed class AuthorReviewEditStrategy(
     }
 
     /// <summary>
-    /// Helper method to safely update either message text, caption, or just reply markup depending on the message type.
-    /// </summary>
-    private async Task SafeEditMessageOrCaptionAsync(long chatId, int messageId, InlineKeyboardMarkup? replyMarkup, string text, CancellationToken ct = default)
-    {
-        try
-        {
-            await botClient.EditMessageText(
-                chatId: chatId,
-                messageId: messageId,
-                text: text,
-                parseMode: ParseMode.Html,
-                replyMarkup: replyMarkup,
-                cancellationToken: ct);
-        }
-        catch
-        {
-            await botClient.EditMessageCaption(
-                chatId: chatId,
-                messageId: messageId,
-                caption: text,
-                parseMode: ParseMode.Html,
-                replyMarkup: replyMarkup,
-                cancellationToken: ct);
-        }
-    }
-
-    /// <summary>
     /// Extracts the actual story text from the admin message format by locating the marker.
     /// </summary>
     private static string ExtractStoryContent(string fullText)
@@ -168,4 +147,28 @@ public sealed class AuthorReviewEditStrategy(
 
         return index >= 0 ? fullText[(index + MessageMarkers.EditedHistoryTextMarker.Length)..].Trim() : fullText;
     }
+
+    [LoggerMessage(
+        EventId = LogEventIds.CallbackQueryMissingContext,
+        Level = LogLevel.Warning,
+        Message = "Callback query is missing context.")]
+    private static partial void LogCallbackQueryMissingContext(ILogger logger);
+
+    [LoggerMessage(
+        EventId = LogEventIds.InvalidStoryIdFormat,
+        Level = LogLevel.Warning,
+        Message = "Invalid story ID format in callback data: {CallbackData}")]
+    private static partial void LogInvalidStoryIdFormat(ILogger logger, string? callbackData);
+
+    [LoggerMessage(
+        EventId = LogEventIds.AdminChannelNotFoundForUpdateMessage,
+        Level = LogLevel.Warning,
+        Message = "Admin channel not found in the database. Cannot update message.")]
+    private static partial void LogAdminChannelNotFoundForUpdateMessage(ILogger logger);
+
+    [LoggerMessage(
+        EventId = LogEventIds.StoryAuthorOrMessageNotFound,
+        Level = LogLevel.Warning,
+        Message = "Story author or MessageId not found for story ID {StoryId}.")]
+    private static partial void LogStoryAuthorOrMessageNotFound(ILogger logger, Guid storyId);
 }

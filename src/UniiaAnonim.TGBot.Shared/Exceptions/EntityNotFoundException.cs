@@ -1,11 +1,16 @@
-﻿namespace UniiaAnonim.TGBot.Shared.Exceptions;
+namespace UniiaAnonim.TGBot.Shared.Exceptions;
 
 /// <summary>
 /// Represents an exception that is thrown when an entity is not found in the data store.
 /// </summary>
-public sealed class EntityNotFoundException(string entityType, object? key = null)
+public sealed class EntityNotFoundException(string entityType, object? key)
     : Exception(FormatMessage(entityType, key))
 {
+    public EntityNotFoundException(string entityType)
+        : this(entityType, null)
+    {
+    }
+
     private static string FormatMessage(string entityType, object? key) =>
         key is null
             ? $"Entity '{entityType}' was not found."

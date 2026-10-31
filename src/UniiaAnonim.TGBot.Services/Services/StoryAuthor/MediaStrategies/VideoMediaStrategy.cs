@@ -1,4 +1,4 @@
-﻿using Telegram.Bot;
+using Telegram.Bot;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
 using Telegram.Bot.Types.ReplyMarkups;
@@ -12,8 +12,6 @@ namespace UniiaAnonim.TGBot.Application.Services.StoryAuthor.MediaStrategies;
 /// <param name="client">The Telegram bot client used to interact with the API.</param>
 public sealed class VideoMediaStrategy(ITelegramBotClient client) : IMediaTypeStrategy
 {
-    private readonly ITelegramBotClient _client = client ?? throw new ArgumentNullException(nameof(client));
-
     /// <inheritdoc/>
     public bool CanHandle(MessageType fileType) => fileType == MessageType.Video;
 
@@ -34,7 +32,7 @@ public sealed class VideoMediaStrategy(ITelegramBotClient client) : IMediaTypeSt
     {
         ArgumentNullException.ThrowIfNull(file);
 
-        return _client.SendVideo(
+        return client.SendVideo(
             chatId: chatId,
             video: file,
             caption: caption,

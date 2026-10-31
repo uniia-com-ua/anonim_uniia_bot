@@ -1,4 +1,4 @@
-﻿using System.Threading.Channels;
+using System.Threading.Channels;
 using Microsoft.AspNetCore.Mvc;
 using Telegram.Bot.Types;
 using UniiaAnonim.TGBot.Api.Middleware;
@@ -27,7 +27,10 @@ public class WebhookController(ChannelWriter<Update> updateWriter) : ControllerB
         [FromBody] Update update,
         CancellationToken cancellationToken)
     {
-        await updateWriter.WriteAsync(update, cancellationToken);
+        if (!updateWriter.TryWrite(update))
+        {
+            await updateWriter.WriteAsync(update, cancellationToken);
+        }
 
         return Ok();
     }

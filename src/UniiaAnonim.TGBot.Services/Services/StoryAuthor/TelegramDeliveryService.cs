@@ -1,4 +1,4 @@
-﻿using Telegram.Bot;
+using Telegram.Bot;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
 using Telegram.Bot.Types.ReplyMarkups;
@@ -22,6 +22,8 @@ public sealed class TelegramDeliveryService(
 {
     private const int MaxCaptionLength = 1024;
     private const int MaxMessageLength = 4096;
+
+    private readonly IMediaTypeStrategy[] _mediaStrategies = [.. mediaStrategies];
 
     /// <inheritdoc/>
     public async Task<TelegramMessageIds> DeliverToAdminAsync(
@@ -71,9 +73,12 @@ public sealed class TelegramDeliveryService(
         CancellationToken ct)
     {
         var messageType = telegramMediaExtractor.GetMessageType(file);
+
         var inputFile = telegramMediaExtractor.GetInputFile(file);
 
         var strategy = GetStrategy(messageType);
+
+        var fileDict = new Dictionary<string, StoryMediaType>(1) { [file.Key] = file.Value };
 
         if (isLongText)
         {
@@ -86,12 +91,12 @@ public sealed class TelegramDeliveryService(
                 replyMarkup: keyboard,
                 replyParameters: new ReplyParameters { MessageId = mediaMessage.MessageId },
                 cancellationToken: ct);
-
-            return new TelegramMessageIds(followUpMessage.MessageId, new Dictionary<string, StoryMediaType>([file]));
+            return new TelegramMessageIds(followUpMessage.MessageId, fileDict);
         }
 
         var message = await strategy.SendSingleAsync(chatId, inputFile, text, keyboard, ct);
-        return new TelegramMessageIds(message.MessageId);
+
+        return new TelegramMessageIds(message.MessageId, fileDict);
     }
 
     /// <summary>
@@ -136,8 +141,15 @@ public sealed class TelegramDeliveryService(
     /// </summary>
     private IMediaTypeStrategy GetStrategy(MessageType contentType)
     {
-        var strategy = mediaStrategies.FirstOrDefault(s => s.CanHandle(contentType));
+        for (int i = 0; i < _mediaStrategies.Length; i++)
+        {
+            var strategy = _mediaStrategies[i];
+            if (strategy.CanHandle(contentType))
+            {
+                return strategy;
+            }
+        }
 
-        return strategy ?? defaultMediaTypeStrategy;
+        return defaultMediaTypeStrategy;
     }
 }

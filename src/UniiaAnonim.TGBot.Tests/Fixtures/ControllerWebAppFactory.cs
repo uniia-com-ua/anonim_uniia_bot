@@ -1,8 +1,9 @@
-﻿using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using UniiaAnonim.TGBot.Shared.Consts;
 
 namespace UniiaAnonim.TGBot.Tests.Fixtures;
 
@@ -49,6 +50,7 @@ public class ControllerWebAppFactory<T>(SubstituteProvider substituteProvider) :
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         base.ConfigureWebHost(builder);
+        builder.UseEnvironment(ApplicationEnvironment.Testing);
 
         builder.ConfigureServices(services =>
         {

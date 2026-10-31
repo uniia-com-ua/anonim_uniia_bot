@@ -1,4 +1,4 @@
-﻿namespace UniiaAnonim.TGBot.Shared.Consts;
+namespace UniiaAnonim.TGBot.Shared.Consts;
 
 public static class ButtonPrefixes
 {
@@ -12,6 +12,10 @@ public static class ButtonPrefixes
 
     public const string AdminRejectStoryPrefix = "admin_reject_";
 
+    public const string AdminBanUserPrefix = "admin_ban_";
+
+    public const string AdminUnbanUserPrefix = "admin_unban_";
+
     public const string AcceptRulesPrefix = "accept_rules";
 
     public static string GetUserApproveStoryButtonPrefix(Guid storyId) => $"{UserApproveStoryPrefix}{storyId}";
@@ -23,4 +27,8 @@ public static class ButtonPrefixes
     public static string GetAdminPublishStoryButtonPrefix(Guid storyId) => $"{AdminPublishStoryPrefix}{storyId}";
 
     public static string GetAdminRejectStoryButtonPrefix(Guid storyId) => $"{AdminRejectStoryPrefix}{storyId}";
+
+    public static string GetAdminBanUserButtonPrefix(Guid storyId) => $"{AdminBanUserPrefix}{storyId}";
+
+    public static string GetAdminUnbanUserButtonPrefix(Guid storyId) => $"{AdminUnbanUserPrefix}{storyId}";
 }

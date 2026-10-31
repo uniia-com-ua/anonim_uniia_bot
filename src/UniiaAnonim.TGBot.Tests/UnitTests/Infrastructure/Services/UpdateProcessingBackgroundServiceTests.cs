@@ -64,8 +64,8 @@ public class UpdateProcessingBackgroundServiceTests
         var update1 = new Update { Id = 1 };
         var update2 = new Update { Id = 2 };
 
-        await _channel.Writer.WriteAsync(update1);
-        await _channel.Writer.WriteAsync(update2);
+        await _channel.Writer.WriteAsync(update1, CancellationToken.None);
+        await _channel.Writer.WriteAsync(update2, CancellationToken.None);
 
         _channel.Writer.Complete();
 
@@ -93,8 +93,8 @@ public class UpdateProcessingBackgroundServiceTests
         var update2 = new Update { Id = 200 };
         var expectedException = new InvalidOperationException("Something went wrong");
 
-        await _channel.Writer.WriteAsync(update1);
-        await _channel.Writer.WriteAsync(update2);
+        await _channel.Writer.WriteAsync(update1, CancellationToken.None);
+        await _channel.Writer.WriteAsync(update2, CancellationToken.None);
         _channel.Writer.Complete();
 
         _dispatcherSubstitute
@@ -131,7 +131,7 @@ public class UpdateProcessingBackgroundServiceTests
         // Arrange
         using var cts = new CancellationTokenSource();
         var update = new Update { Id = 1 };
-        await _channel.Writer.WriteAsync(update);
+        await _channel.Writer.WriteAsync(update, CancellationToken.None);
 
         await cts.CancelAsync();
 
@@ -140,7 +140,7 @@ public class UpdateProcessingBackgroundServiceTests
 
         // Assert
         Assert.IsType<OperationCanceledException>(exception, exactMatch: false);
-        await _dispatcherSubstitute.DidNotReceiveWithAnyArgs().DispatchAsync(default, default);
+        await _dispatcherSubstitute.DidNotReceiveWithAnyArgs().DispatchAsync(default, CancellationToken.None);
     }
 
     public void Dispose()

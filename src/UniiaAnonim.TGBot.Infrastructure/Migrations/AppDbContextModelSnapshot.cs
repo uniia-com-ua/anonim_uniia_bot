@@ -17,7 +17,7 @@ namespace UniiaAnonim.TGBot.Infrastructure.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.10")
+                .HasAnnotation("ProductVersion", "10.0.14")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -41,6 +41,32 @@ namespace UniiaAnonim.TGBot.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("AuthorAgreement");
+                });
+
+            modelBuilder.Entity("UniiaAnonim.TGBot.Domain.Models.BannedUser", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("TelegramIdHash")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TelegramIdHash")
+                        .IsUnique();
+
+                    b.ToTable("BannedUsers", (string)null);
                 });
 
             modelBuilder.Entity("UniiaAnonim.TGBot.Domain.Models.Channel", b =>
@@ -90,6 +116,10 @@ namespace UniiaAnonim.TGBot.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("AuthorIdHash");
+
+                    b.HasIndex("ChannelMessageId");
+
+                    b.HasIndex("AuthorIdHash", "Status");
 
                     b.ToTable("StoryAuthor");
                 });

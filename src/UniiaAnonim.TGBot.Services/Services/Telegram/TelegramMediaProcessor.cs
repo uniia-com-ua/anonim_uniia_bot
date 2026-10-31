@@ -1,4 +1,4 @@
-﻿using Telegram.Bot.Types;
+using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
 using UniiaAnonim.TGBot.Application.Interfaces.Telegram;
 using UniiaAnonim.TGBot.Shared.Enums;
@@ -13,62 +13,25 @@ public sealed class TelegramMediaProcessor : ITelegramMediaProcessor
     /// <inheritdoc/>
     public Dictionary<string, StoryMediaType> ExtractMediaFiles(Message message)
     {
-        var mediaFiles = new Dictionary<string, StoryMediaType>();
-
-        if (message is null)
-        {
-            return mediaFiles;
-        }
-
-        if (message.Photo?.OrderByDescending(p => p.FileSize).FirstOrDefault() is { FileId: { } photoId })
-        {
-            mediaFiles[photoId] = StoryMediaType.Photo;
-            return mediaFiles;
-        }
-
-        if (message.Video?.FileId is { } videoId)
-        {
-            mediaFiles[videoId] = StoryMediaType.Video;
-            return mediaFiles;
-        }
-
-        if (message.Document?.FileId is { } documentId)
-        {
-            mediaFiles[documentId] = StoryMediaType.Document;
-            return mediaFiles;
-        }
-
-        if (message.Animation?.FileId is { } animationId)
-        {
-            mediaFiles[animationId] = StoryMediaType.Document;
-            return mediaFiles;
-        }
-
-        if (message.Audio?.FileId is { } audioId)
-        {
-            mediaFiles[audioId] = StoryMediaType.Document;
-            return mediaFiles;
-        }
-
+        var mediaFiles = new Dictionary<string, StoryMediaType>(1);
+        PopulateMediaFiles(message, mediaFiles);
         return mediaFiles;
     }
 
     /// <inheritdoc/>
     public Dictionary<string, StoryMediaType> ExtractMediaFiles(IEnumerable<Message> messages)
     {
-        var mediaFiles = new Dictionary<string, StoryMediaType>();
-
         if (messages is null)
         {
-            return mediaFiles;
+            return [];
         }
+
+        int capacity = messages is ICollection<Message> col ? col.Count : 4;
+        var mediaFiles = new Dictionary<string, StoryMediaType>(capacity);
 
         foreach (var message in messages)
         {
-            foreach (var kvp in ExtractMediaFiles(message))
-            {
-                mediaFiles[kvp.Key] = kvp.Value;
-            }
+            PopulateMediaFiles(message, mediaFiles);
         }
 
         return mediaFiles;
@@ -79,12 +42,14 @@ public sealed class TelegramMediaProcessor : ITelegramMediaProcessor
     {
         var fileId = mediaPair.Key;
 
+        var parseMode = caption is not null ? ParseMode.Html : ParseMode.None;
+
         return mediaPair.Value switch
         {
-            StoryMediaType.Video => new InputMediaVideo(InputFile.FromFileId(fileId)) { Caption = caption },
-            StoryMediaType.Photo => new InputMediaPhoto(InputFile.FromFileId(fileId)) { Caption = caption },
-            StoryMediaType.Document => new InputMediaDocument(InputFile.FromFileId(fileId)) { Caption = caption },
-            _ => throw new NotImplementedException($"Media type '{mediaPair.Value}' is not supported."),
+            StoryMediaType.Video => new InputMediaVideo(InputFile.FromFileId(fileId)) { Caption = caption, ParseMode = parseMode },
+            StoryMediaType.Photo => new InputMediaPhoto(InputFile.FromFileId(fileId)) { Caption = caption, ParseMode = parseMode },
+            StoryMediaType.Document => new InputMediaDocument(InputFile.FromFileId(fileId)) { Caption = caption, ParseMode = parseMode },
+            _ => throw new ArgumentOutOfRangeException(nameof(mediaPair), $"Unsupported media type: {mediaPair.Value}"),
         };
     }
 
@@ -125,5 +90,42 @@ public sealed class TelegramMediaProcessor : ITelegramMediaProcessor
             StoryMediaType.Document => MessageType.Document,
             _ => MessageType.Document,
         };
+    }
+
+    private static void PopulateMediaFiles(Message message, Dictionary<string, StoryMediaType> destination)
+    {
+        if (message is null)
+        {
+            return;
+        }
+
+        if (message.Photo is { Length: > 0 } photos)
+        {
+            destination[photos[^1].FileId] = StoryMediaType.Photo;
+            return;
+        }
+
+        if (message.Video?.FileId is { } videoId)
+        {
+            destination[videoId] = StoryMediaType.Video;
+            return;
+        }
+
+        if (message.Document?.FileId is { } documentId)
+        {
+            destination[documentId] = StoryMediaType.Document;
+            return;
+        }
+
+        if (message.Animation?.FileId is { } animationId)
+        {
+            destination[animationId] = StoryMediaType.Document;
+            return;
+        }
+
+        if (message.Audio?.FileId is { } audioId)
+        {
+            destination[audioId] = StoryMediaType.Document;
+        }
     }
 }

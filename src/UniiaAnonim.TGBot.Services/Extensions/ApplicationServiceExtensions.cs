@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection;
 using UniiaAnonim.TGBot.Application.Interfaces.StoryAuthor;
 using UniiaAnonim.TGBot.Application.Interfaces.Telegram;
 using UniiaAnonim.TGBot.Application.Services.StoryAuthor;
@@ -37,13 +37,15 @@ public static class ApplicationServiceExtensions
     private static IServiceCollection AddCoreServices(this IServiceCollection services)
     {
         services
+            .AddMemoryCache()
             .AddScoped<ITelegramUpdateDispatcher, TelegramUpdateDispatcher>()
             .AddScoped<IStoryDispatcherService, StoryDispatcherService>()
             .AddScoped<ITelegramDeliveryService, TelegramDeliveryService>()
             .AddScoped<IAdminActionKeyboardFactory, AdminActionKeyboardFactory>()
             .AddScoped<IStoryAuthorService, StoryAuthorService>()
-            .AddTransient<ITelegramWebAppAuthenticator, TelegramWebAppAuthenticator>()
-            .AddTransient<ITelegramMediaProcessor, TelegramMediaProcessor>();
+            .AddScoped<IBannedUserService, BannedUserService>()
+            .AddSingleton<ITelegramWebAppAuthenticator, TelegramWebAppAuthenticator>()
+            .AddSingleton<ITelegramMediaProcessor, TelegramMediaProcessor>();
 
         return services;
     }
@@ -74,17 +76,19 @@ public static class ApplicationServiceExtensions
             .AddScoped<IDefaultTelegramUpdateStrategy, DefaultUpdateStrategy>()
             .AddScoped<ITelegramUpdateStrategy, WelcomeStrategy>()
             .AddScoped<ITelegramUpdateStrategy, EnsureRulesAcceptedStrategy>()
+            .AddScoped<ITelegramUpdateStrategy, AcceptRulesCallbackStrategy>()
             .AddScoped<ITelegramUpdateStrategy, BotRegistrationStrategy>()
             .AddScoped<ITelegramUpdateStrategy, BotRemovalStrategy>()
             .AddScoped<ITelegramUpdateStrategy, CreateNewStoryStrategy>()
             .AddScoped<ITelegramUpdateStrategy, AdminReplyToStoryStrategy>()
             .AddScoped<ITelegramUpdateStrategy, UserReplyToAdminStrategy>()
             .AddScoped<ITelegramUpdateStrategy, RejectStoryStrategy>()
+            .AddScoped<ITelegramUpdateStrategy, BanUserStrategy>()
+            .AddScoped<ITelegramUpdateStrategy, UnbanUserStrategy>()
             .AddScoped<ITelegramUpdateStrategy, PublishStoryStrategy>()
             .AddScoped<ITelegramUpdateStrategy, EditStoryCallbackStrategy>()
             .AddScoped<ITelegramUpdateStrategy, AdminSubmitEditedStoryStrategy>()
-            .AddScoped<ITelegramUpdateStrategy, AuthorReviewEditStrategy>()
-            .AddScoped<ITelegramUpdateStrategy, AcceptRulesCallbackStrategy>();
+            .AddScoped<ITelegramUpdateStrategy, AuthorReviewEditStrategy>();
 
         return services;
     }

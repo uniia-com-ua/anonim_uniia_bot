@@ -1,6 +1,7 @@
 using UniiaAnonim.TGBot.Api.Extensions;
 using UniiaAnonim.TGBot.Application.Extensions;
 using UniiaAnonim.TGBot.Infrastructure.Extensions;
+using UniiaAnonim.TGBot.Shared.Consts;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -12,7 +13,10 @@ builder.Services
 
 var app = builder.Build();
 
-await app.Services.UseInfrastructureDatabaseAsync();
+if (!app.Environment.IsEnvironment(ApplicationEnvironment.Testing))
+{
+    await app.Services.UseInfrastructureDatabaseAsync();
+}
 
 app.UseExceptionHandler();
 

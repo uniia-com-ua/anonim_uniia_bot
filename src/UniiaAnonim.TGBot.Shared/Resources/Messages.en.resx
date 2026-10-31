@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <root>
   <!-- 
     Microsoft ResX Schema 
@@ -260,5 +260,37 @@ You can drop your story to the bot right now!</value>
   </data>
   <data name="str0034" xml:space="preserve">
     <value>⚠️ Please accept the rules first to start writing a story</value>
+  </data>
+  <data name="str0035" xml:space="preserve">
+    <value>{0}
+
+This story was published anonymously. Send your story &lt;a href="https://t.me/{1}"&gt;HERE&lt;/a&gt;.</value>
+  </data>
+  <data name="str0036" xml:space="preserve">
+    <value>❌ Your story is too long. Maximum allowed length is 4096 characters.</value>
+  </data>
+  <data name="str0037" xml:space="preserve">
+    <value>⛔ Ban</value>
+  </data>
+  <data name="str0038" xml:space="preserve">
+    <value>⛔ User has been banned.</value>
+  </data>
+  <data name="str0039" xml:space="preserve">
+    <value>{0}
+
+━━━━━━━━━━━━━━━
+&lt;b&gt;[Status: ⛔ Banned]&lt;/b&gt;</value>
+  </data>
+  <data name="str0040" xml:space="preserve">
+    <value>❌ An error occurred while banning the user.</value>
+  </data>
+  <data name="str0041" xml:space="preserve">
+    <value>🔓 Unban</value>
+  </data>
+  <data name="str0042" xml:space="preserve">
+    <value>🔓 User has been unbanned.</value>
+  </data>
+  <data name="str0043" xml:space="preserve">
+    <value>❌ An error occurred while unbanning the user.</value>
   </data>
 </root>

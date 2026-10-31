@@ -35,7 +35,7 @@ public class TelegramCommandsInitializerTests
         _optionsSubstitute.Value.Returns(new GeneralOptions { DefaultLanguage = "uk-UA" });
 
         _localizerSubstitute[Arg.Any<string>()]
-            .Returns(callInfo => new LocalizedString(callInfo.Arg<string>()!, $"{callInfo.Arg<string>()}_Translated"));
+            .Returns(callInfo => new LocalizedString(callInfo.Arg<string>(), $"{callInfo.Arg<string>()}_Translated"));
 
         _initializer = new TelegramCommandsInitializer(_botClientSubstitute, _localizerSubstitute, _optionsSubstitute, _loggerSubstitute);
     }

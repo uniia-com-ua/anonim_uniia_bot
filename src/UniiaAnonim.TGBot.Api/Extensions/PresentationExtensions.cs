@@ -1,4 +1,4 @@
-﻿using UniiaAnonim.TGBot.Api.Middleware;
+using UniiaAnonim.TGBot.Api.Middleware;
 
 namespace UniiaAnonim.TGBot.Api.Extensions;
 
@@ -23,7 +23,7 @@ public static class PresentationExtensions
         services.AddExceptionHandler<GlobalExceptionHandler>();
         services.AddProblemDetails();
 
-        services.AddTransient<TelegramSecretTokenFilter>();
+        services.AddSingleton<TelegramSecretTokenFilter>();
 
         return services;
     }

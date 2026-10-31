@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.Localization;
+using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Logging;
 using Telegram.Bot;
 using Telegram.Bot.Types;
@@ -15,7 +15,7 @@ namespace UniiaAnonim.TGBot.Application.Services.Telegram.EventStrategies;
 /// Defines a strategy for handling the accept rules callback query.
 /// Marks that the user has accepted the rules and notifies them.
 /// </summary>
-public sealed class AcceptRulesCallbackStrategy(
+public sealed partial class AcceptRulesCallbackStrategy(
     ITelegramBotClient botClient,
     IStoryAuthorService storyAuthorService,
     IStringLocalizer<Messages> localizer,
@@ -37,7 +37,7 @@ public sealed class AcceptRulesCallbackStrategy(
 
         if (callbackQuery.Message is null)
         {
-            logger.LogWarning("Callback query {CallbackQueryId} is missing message context.", callbackQuery.Id);
+            LogCallbackQueryMissingMessageContext(logger, callbackQuery.Id);
             return;
         }
 
@@ -56,4 +56,10 @@ public sealed class AcceptRulesCallbackStrategy(
 
         await botClient.AnswerCallbackQuery(callbackQuery.Id, cancellationToken: ct);
     }
+
+    [LoggerMessage(
+        EventId = LogEventIds.CallbackQueryMissingMessageContext,
+        Level = LogLevel.Warning,
+        Message = "Callback query {CallbackQueryId} is missing message context.")]
+    private static partial void LogCallbackQueryMissingMessageContext(ILogger logger, string callbackQueryId);
 }

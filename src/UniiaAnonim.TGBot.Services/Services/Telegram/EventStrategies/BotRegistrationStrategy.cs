@@ -1,9 +1,10 @@
-﻿using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
 using UniiaAnonim.TGBot.Application.Interfaces.Telegram;
 using UniiaAnonim.TGBot.Domain.Interfaces.Repositories;
 using UniiaAnonim.TGBot.Domain.Models;
+using UniiaAnonim.TGBot.Shared.Consts;
 using UniiaAnonim.TGBot.Shared.Enums;
 
 namespace UniiaAnonim.TGBot.Application.Services.Telegram.EventStrategies;
@@ -12,7 +13,7 @@ namespace UniiaAnonim.TGBot.Application.Services.Telegram.EventStrategies;
 /// Defines a strategy for handling the my_chat_member update.
 /// Registers the chat (group or channel) in the database when the bot is added or promoted.
 /// </summary>
-public sealed class BotRegistrationStrategy(
+public sealed partial class BotRegistrationStrategy(
     IChannelRepository channelRepository,
     ILogger<BotRegistrationStrategy> logger)
     : ITelegramUpdateStrategy
@@ -39,13 +40,13 @@ public sealed class BotRegistrationStrategy(
 
         if (channelType is null)
         {
-            logger.LogWarning("Unsupported chat type {ChatType} encountered for chat ID {ChatId}.", chat.Type, chat.Id);
+            LogUnsupportedChatTypeEncountered(logger, chat.Type, chat.Id);
             return;
         }
 
         if (await channelRepository.ExistsAsync(chat.Id, ct))
         {
-            logger.LogWarning("Channel with ID {ChannelId} already exists in the database. Skipping registration.", chat.Id);
+            LogChannelAlreadyExists(logger, chat.Id);
             return;
         }
 
@@ -58,4 +59,16 @@ public sealed class BotRegistrationStrategy(
         await channelRepository.CreateAsync(channel, ct);
         await channelRepository.SaveChangesAsync(ct);
     }
+
+    [LoggerMessage(
+        EventId = LogEventIds.UnsupportedChatTypeEncountered,
+        Level = LogLevel.Warning,
+        Message = "Unsupported chat type {ChatType} encountered for chat ID {ChatId}.")]
+    private static partial void LogUnsupportedChatTypeEncountered(ILogger logger, ChatType chatType, long chatId);
+
+    [LoggerMessage(
+        EventId = LogEventIds.ChannelAlreadyExists,
+        Level = LogLevel.Warning,
+        Message = "Channel with ID {ChannelId} already exists in the database. Skipping registration.")]
+    private static partial void LogChannelAlreadyExists(ILogger logger, long channelId);
 }

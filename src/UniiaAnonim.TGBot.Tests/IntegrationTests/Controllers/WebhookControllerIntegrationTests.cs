@@ -46,7 +46,7 @@ public class WebhookControllerIntegrationTests
         var update = new Update { Id = 123 };
 
         // Act
-        var response = await client.PostAsJsonAsync(Routes.TelegramWebhook, update);
+        var response = await client.PostAsJsonAsync(Routes.TelegramWebhook, update, CancellationToken.None);
 
         // Assert
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -66,7 +66,7 @@ public class WebhookControllerIntegrationTests
         var update = new Update { Id = 123 };
 
         // Act
-        var response = await client.PostAsJsonAsync(Routes.TelegramWebhook, update);
+        var response = await client.PostAsJsonAsync(Routes.TelegramWebhook, update, CancellationToken.None);
 
         // Assert
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);

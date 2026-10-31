@@ -1,4 +1,4 @@
-﻿namespace UniiaAnonim.TGBot.Shared.Configuration.Telegram;
+namespace UniiaAnonim.TGBot.Shared.Configuration.Telegram;
 
 /// <summary>
 /// Represents the configuration options required for Telegram Bot integration.
@@ -15,7 +15,7 @@ public class TelegramBotOptions
     /// Gets or sets the unique authorization token for the Telegram Bot.
     /// This token is obtained from the BotFather on Telegram (e.g., "123456789:ABCdefGHIjklmNOPQrsTUVwxyZ").
     /// </summary>
-    public string BotToken { get; set; }
+    public string BotToken { get; set; } = string.Empty;
 
     /// <summary>
     /// Gets or sets the secret token used to verify that incoming webhook requests

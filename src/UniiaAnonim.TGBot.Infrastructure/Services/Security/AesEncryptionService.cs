@@ -1,4 +1,5 @@
-﻿using System.Security.Cryptography;
+using System.Buffers;
+using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.Options;
 using UniiaAnonim.TGBot.Application.Interfaces.Security;
@@ -7,12 +8,16 @@ using UniiaAnonim.TGBot.Shared.Configuration;
 namespace UniiaAnonim.TGBot.Infrastructure.Services.Security;
 
 /// <summary>
-/// Provides symmetric encryption and decryption implementations using the Advanced Encryption Standard (AES) algorithm.
+/// Provides high-performance, low-allocation symmetric encryption and decryption implementations
+/// using the Advanced Encryption Standard (AES) CBC algorithm with PKCS7 padding.
 /// </summary>
-public class AesEncryptionService(
+public sealed class AesEncryptionService(
     IOptions<GeneralOptions> options)
     : ISymmetricEncryptionService
 {
+    private const int IvSizeInBytes = 16;
+    private const int StackallocThreshold = 256;
+
     private readonly byte[] _keyBytes = DeriveKey(options.Value.SymmetricEncryptionKey);
 
     /// <inheritdoc />
@@ -23,21 +28,32 @@ public class AesEncryptionService(
         using var aes = Aes.Create();
         aes.Key = _keyBytes;
         aes.GenerateIV();
-
         var iv = aes.IV;
 
-        using var encryptor = aes.CreateEncryptor(aes.Key, iv);
-        using var ms = new MemoryStream();
+        int maxByteCount = Encoding.UTF8.GetMaxByteCount(plainText.Length);
+        byte[]? rentedPlain = null;
+        Span<byte> plainBytes = maxByteCount <= StackallocThreshold
+            ? stackalloc byte[maxByteCount]
+            : (rentedPlain = ArrayPool<byte>.Shared.Rent(maxByteCount));
 
-        ms.Write(iv, 0, iv.Length);
-
-        using (var cs = new CryptoStream(ms, encryptor, CryptoStreamMode.Write))
-        using (var sw = new StreamWriter(cs, Encoding.UTF8))
+        try
         {
-            sw.Write(plainText);
-        }
+            int plainWritten = Encoding.UTF8.GetBytes(plainText, plainBytes);
+            int cipherLength = aes.GetCiphertextLengthCbc(plainWritten, PaddingMode.PKCS7);
 
-        return Convert.ToBase64String(ms.ToArray());
+            byte[] result = new byte[IvSizeInBytes + cipherLength];
+            iv.CopyTo(result, 0);
+            aes.EncryptCbc(plainBytes[..plainWritten], iv, result.AsSpan(IvSizeInBytes), PaddingMode.PKCS7);
+
+            return Convert.ToBase64String(result);
+        }
+        finally
+        {
+            if (rentedPlain is not null)
+            {
+                ArrayPool<byte>.Shared.Return(rentedPlain);
+            }
+        }
     }
 
     /// <inheritdoc />
@@ -45,25 +61,36 @@ public class AesEncryptionService(
     {
         ArgumentException.ThrowIfNullOrEmpty(cipherText);
 
-        var fullCipher = Convert.FromBase64String(cipherText);
+        byte[] fullCipher = Convert.FromBase64String(cipherText);
+
+        if (fullCipher.Length <= IvSizeInBytes)
+        {
+            throw new ArgumentException("Cipher text is invalid.", nameof(cipherText));
+        }
 
         using var aes = Aes.Create();
         aes.Key = _keyBytes;
 
-        var iv = new byte[aes.BlockSize / 8];
-        var cipherBytes = new byte[fullCipher.Length - iv.Length];
+        ReadOnlySpan<byte> iv = fullCipher.AsSpan(0, IvSizeInBytes);
+        ReadOnlySpan<byte> cipherData = fullCipher.AsSpan(IvSizeInBytes);
 
-        Buffer.BlockCopy(fullCipher, 0, iv, 0, iv.Length);
-        Buffer.BlockCopy(fullCipher, iv.Length, cipherBytes, 0, cipherBytes.Length);
+        byte[]? rented = null;
+        Span<byte> decryptedSpan = cipherData.Length <= StackallocThreshold
+            ? stackalloc byte[cipherData.Length]
+            : (rented = ArrayPool<byte>.Shared.Rent(cipherData.Length));
 
-        aes.IV = iv;
-
-        using var decryptor = aes.CreateDecryptor(aes.Key, aes.IV);
-        using var ms = new MemoryStream(cipherBytes);
-        using var cs = new CryptoStream(ms, decryptor, CryptoStreamMode.Read);
-        using var sr = new StreamReader(cs, Encoding.UTF8);
-
-        return sr.ReadToEnd();
+        try
+        {
+            int written = aes.DecryptCbc(cipherData, iv, decryptedSpan, PaddingMode.PKCS7);
+            return Encoding.UTF8.GetString(decryptedSpan[..written]);
+        }
+        finally
+        {
+            if (rented is not null)
+            {
+                ArrayPool<byte>.Shared.Return(rented);
+            }
+        }
     }
 
     /// <summary>

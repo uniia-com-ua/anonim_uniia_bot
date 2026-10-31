@@ -1,4 +1,4 @@
-﻿using UniiaAnonim.TGBot.Domain.Models;
+using UniiaAnonim.TGBot.Domain.Models;
 
 namespace UniiaAnonim.TGBot.Domain.Interfaces.Repositories;
 
@@ -14,4 +14,12 @@ public interface IAuthorAgreementRepository
     /// <see langword="true"/> if the author has accepted the rules; otherwise, <see langword="false"/>.
     /// </returns>
     Task<bool> HasAcceptedRulesAsync(string authorIdHash, CancellationToken ct = default);
+
+    /// <summary>
+    /// Idempotently records that the author with the specified hash has accepted the rules.
+    /// </summary>
+    /// <param name="authorIdHash">The unique hash of the author.</param>
+    /// <param name="ct">A token to monitor for cancellation requests.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
+    Task AcceptRulesAsync(string authorIdHash, CancellationToken ct = default);
 }

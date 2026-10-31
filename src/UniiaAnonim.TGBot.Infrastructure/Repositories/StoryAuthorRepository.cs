@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using UniiaAnonim.TGBot.Domain.Interfaces.Repositories;
 using UniiaAnonim.TGBot.Domain.Models;
 using UniiaAnonim.TGBot.Infrastructure.Persistence;
@@ -13,7 +13,7 @@ namespace UniiaAnonim.TGBot.Infrastructure.Repositories;
 /// including secure encryption handling for sensitive identifiers.
 /// </summary>
 /// <param name="appDbContext">The application database context.</param>
-public class StoryAuthorRepository(
+public sealed class StoryAuthorRepository(
     AppDbContext appDbContext)
     : GenericRepository<StoryAuthor>(appDbContext),
     IStoryAuthorRepository
@@ -58,22 +58,12 @@ public class StoryAuthorRepository(
         var messageId = await DbSet
             .AsNoTracking()
             .Where(x => x.AuthorIdHash == authorIdHash && x.Status == StoryStatus.Pending)
+            .OrderByDescending(x => x.Id)
             .Select(x => x.ChannelMessageId)
             .FirstOrDefaultAsync(ct);
 
         return messageId != default ? messageId : throw new EntityNotFoundException(nameof(StoryAuthor), authorIdHash);
     }
-
-    /// <summary>
-    /// Asynchronously checks if a story author record is marked as published.
-    /// </summary>
-    /// <param name="id">The unique identifier of the story record to check.</param>
-    /// <param name="ct">A token to monitor for cancellation requests.</param>
-    /// <returns><see langword="true"/> if the story is published; otherwise, <see langword="false"/>.</returns>
-    public async Task<bool> IsPublishedAsync(Guid id, CancellationToken ct = default)
-        => await DbSet
-                .AsNoTracking()
-                .AnyAsync(x => x.Id == id && x.Status == StoryStatus.Published, ct);
 
     /// <summary>
     /// Asynchronously assigns Telegram message identifiers to a story record based on its unique identifier, including related media messages.
@@ -84,34 +74,48 @@ public class StoryAuthorRepository(
     /// <returns>A task that represents the asynchronous update operation.</returns>
     public async Task SetMessageIdAsync(Guid id, TelegramMessageIds messageIds, CancellationToken ct = default)
     {
-        await DbSet
-            .Where(x => x.Id == id)
-            .ExecuteUpdateAsync(
-                s => s.SetProperty(x => x.ChannelMessageId, messageIds.InteractiveMessageId),
-                ct);
-
         if (messageIds.MediaFiles is { Count: > 0 })
         {
-            var existingMediaEntities = await Context.Set<StoryFileEntity>()
-                .Where(x => x.StoryId == id)
-                .ToListAsync(ct);
+            await using var transaction = await appDbContext.Database.BeginTransactionAsync(ct);
 
-            if (existingMediaEntities.Count > 0)
+            await DbSet
+                .Where(x => x.Id == id)
+                .ExecuteUpdateAsync(s => s.SetProperty(x => x.ChannelMessageId, messageIds.InteractiveMessageId), ct);
+
+            var storyFilesSet = Context.Set<StoryFileEntity>();
+
+            await storyFilesSet.Where(x => x.StoryId == id)
+                .ExecuteDeleteAsync(ct);
+
+            var newMediaEntities = messageIds.MediaFiles.Select(pair => new StoryFileEntity
             {
-                Context.Set<StoryFileEntity>().RemoveRange(existingMediaEntities);
-            }
+                StoryId = id,
+                FileId = pair.Key,
+                Type = pair.Value,
+            });
 
-            var newMediaEntities = messageIds.MediaFiles
-                .Select(pair => new StoryFileEntity
-                {
-                    StoryId = id,
-                    FileId = pair.Key,
-                    Type = pair.Value,
-                });
+            storyFilesSet.AddRange(newMediaEntities);
 
-            await Context.Set<StoryFileEntity>().AddRangeAsync(newMediaEntities, ct);
-            await Context.SaveChangesAsync(ct);
+            await appDbContext.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
         }
+        else
+        {
+            await DbSet
+                .Where(x => x.Id == id)
+                .ExecuteUpdateAsync(s => s.SetProperty(x => x.ChannelMessageId, messageIds.InteractiveMessageId), ct);
+        }
+    }
+
+    /// <inheritdoc/>
+    public async Task<string> GetEncryptedAuthorIdAsync(Guid id, CancellationToken ct = default)
+    {
+        return await DbSet
+            .AsNoTracking()
+            .Where(x => x.Id == id)
+            .Select(x => x.AuthorId)
+            .FirstOrDefaultAsync(ct)
+            ?? throw new EntityNotFoundException(nameof(StoryAuthor), id);
     }
 
     /// <summary>

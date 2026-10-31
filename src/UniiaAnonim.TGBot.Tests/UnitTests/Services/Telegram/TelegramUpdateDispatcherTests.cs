@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using Microsoft.Extensions.Options;
 using NSubstitute;
 using Telegram.Bot.Types;
@@ -15,6 +15,7 @@ public class TelegramUpdateDispatcherTests
 {
     private readonly IDefaultTelegramUpdateStrategy _defaultStrategySubstitute;
     private readonly IOptions<GeneralOptions> _optionsSubstitute;
+    private readonly IBannedUserService _bannedUserServiceSubstitute;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="TelegramUpdateDispatcherTests"/> class.
@@ -24,6 +25,8 @@ public class TelegramUpdateDispatcherTests
     {
         _defaultStrategySubstitute = Substitute.For<IDefaultTelegramUpdateStrategy>();
         _optionsSubstitute = Options.Create(new GeneralOptions { DefaultLanguage = "en" });
+        _bannedUserServiceSubstitute = Substitute.For<IBannedUserService>();
+        _bannedUserServiceSubstitute.IsBannedAsync(Arg.Any<long>(), Arg.Any<CancellationToken>()).Returns(false);
     }
 
     /// <summary>
@@ -45,14 +48,14 @@ public class TelegramUpdateDispatcherTests
             .Returns(Task.CompletedTask)
             .AndDoes(_ => executedCulture = CultureInfo.CurrentCulture.Name);
 
-        var dispatcher = new TelegramUpdateDispatcher(_optionsSubstitute, [strategy], _defaultStrategySubstitute);
+        var dispatcher = new TelegramUpdateDispatcher(_optionsSubstitute, [strategy], _defaultStrategySubstitute, _bannedUserServiceSubstitute);
 
         // Act
         await dispatcher.DispatchAsync(update, CancellationToken.None);
 
         // Assert
         await strategy.Received(1).HandleAsync(update, CancellationToken.None);
-        await _defaultStrategySubstitute.DidNotReceiveWithAnyArgs().HandleAsync(default, default);
+        await _defaultStrategySubstitute.DidNotReceiveWithAnyArgs().HandleAsync(default, CancellationToken.None);
         Assert.Equal(expectedCulture, executedCulture);
     }
 
@@ -68,13 +71,13 @@ public class TelegramUpdateDispatcherTests
         var strategy1 = Substitute.For<ITelegramUpdateStrategy>();
         strategy1.CanHandleAsync(update, Arg.Any<CancellationToken>()).Returns(false);
 
-        var dispatcher = new TelegramUpdateDispatcher(_optionsSubstitute, [strategy1], _defaultStrategySubstitute);
+        var dispatcher = new TelegramUpdateDispatcher(_optionsSubstitute, [strategy1], _defaultStrategySubstitute, _bannedUserServiceSubstitute);
 
         // Act
         await dispatcher.DispatchAsync(update, CancellationToken.None);
 
         // Assert
-        await strategy1.DidNotReceiveWithAnyArgs().HandleAsync(default, default);
+        await strategy1.DidNotReceiveWithAnyArgs().HandleAsync(default, CancellationToken.None);
         await _defaultStrategySubstitute.Received(1).HandleAsync(update, CancellationToken.None);
     }
 
@@ -93,15 +96,15 @@ public class TelegramUpdateDispatcherTests
         var secondValidStrategy = Substitute.For<ITelegramUpdateStrategy>();
         secondValidStrategy.CanHandleAsync(update, Arg.Any<CancellationToken>()).Returns(true);
 
-        var dispatcher = new TelegramUpdateDispatcher(_optionsSubstitute, [firstValidStrategy, secondValidStrategy], _defaultStrategySubstitute);
+        var dispatcher = new TelegramUpdateDispatcher(_optionsSubstitute, [firstValidStrategy, secondValidStrategy], _defaultStrategySubstitute, _bannedUserServiceSubstitute);
 
         // Act
         await dispatcher.DispatchAsync(update, CancellationToken.None);
 
         // Assert
         await firstValidStrategy.Received(1).HandleAsync(update, CancellationToken.None);
-        await secondValidStrategy.DidNotReceiveWithAnyArgs().HandleAsync(default, default);
-        await _defaultStrategySubstitute.DidNotReceiveWithAnyArgs().HandleAsync(default, default);
+        await secondValidStrategy.DidNotReceiveWithAnyArgs().HandleAsync(default, CancellationToken.None);
+        await _defaultStrategySubstitute.DidNotReceiveWithAnyArgs().HandleAsync(default, CancellationToken.None);
     }
 
     /// <summary>
@@ -123,12 +126,107 @@ public class TelegramUpdateDispatcherTests
             .Returns(Task.CompletedTask)
             .AndDoes(_ => executedCulture = CultureInfo.CurrentCulture.Name);
 
-        var dispatcher = new TelegramUpdateDispatcher(customOptionsSubstitute, [strategy], _defaultStrategySubstitute);
+        var dispatcher = new TelegramUpdateDispatcher(customOptionsSubstitute, [strategy], _defaultStrategySubstitute, _bannedUserServiceSubstitute);
 
         // Act
         await dispatcher.DispatchAsync(update, CancellationToken.None);
 
         // Assert
         Assert.Equal(customCulture, executedCulture);
+    }
+
+    /// <summary>
+    /// Ensures that the dispatcher applies the culture extracted from the user's message language code.
+    /// </summary>
+    [Fact]
+    public async Task DispatchAsyncWhenMessageHasLanguageCodeAppliesUserCulture()
+    {
+        // Arrange
+        var customOptionsSubstitute = Options.Create(new GeneralOptions { DefaultLanguage = "en" });
+        var update = new Update
+        {
+            Message = new Message
+            {
+                From = new User { Id = 12345, LanguageCode = "uk-UA" },
+            },
+        };
+
+        var strategy = Substitute.For<ITelegramUpdateStrategy>();
+        strategy.CanHandleAsync(update, Arg.Any<CancellationToken>()).Returns(true);
+
+        string? executedCulture = null;
+        strategy.HandleAsync(update, Arg.Any<CancellationToken>())
+            .Returns(Task.CompletedTask)
+            .AndDoes(_ => executedCulture = CultureInfo.CurrentCulture.Name);
+
+        var dispatcher = new TelegramUpdateDispatcher(customOptionsSubstitute, [strategy], _defaultStrategySubstitute, _bannedUserServiceSubstitute);
+
+        // Act
+        await dispatcher.DispatchAsync(update, CancellationToken.None);
+
+        // Assert
+        Assert.Equal("uk", executedCulture);
+    }
+
+    /// <summary>
+    /// Verifies that when a message is received from a banned user, the dispatcher immediately returns
+    /// without evaluating or executing any update strategy.
+    /// </summary>
+    [Fact]
+    public async Task DispatchAsyncWhenMessageUserIsBannedReturnsEarlyWithoutExecutingStrategies()
+    {
+        // Arrange
+        const long bannedUserId = 99999;
+        var update = new Update
+        {
+            Message = new Message
+            {
+                From = new User { Id = bannedUserId },
+            },
+        };
+
+        _bannedUserServiceSubstitute.IsBannedAsync(bannedUserId, Arg.Any<CancellationToken>()).Returns(true);
+
+        var strategy = Substitute.For<ITelegramUpdateStrategy>();
+        var dispatcher = new TelegramUpdateDispatcher(_optionsSubstitute, [strategy], _defaultStrategySubstitute, _bannedUserServiceSubstitute);
+
+        // Act
+        await dispatcher.DispatchAsync(update, TestContext.Current.CancellationToken);
+
+        // Assert
+        await strategy.DidNotReceiveWithAnyArgs().CanHandleAsync(default, TestContext.Current.CancellationToken);
+        await strategy.DidNotReceiveWithAnyArgs().HandleAsync(default, TestContext.Current.CancellationToken);
+        await _defaultStrategySubstitute.DidNotReceiveWithAnyArgs().HandleAsync(default, TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
+    /// Verifies that when a callback query is received from a banned user, the dispatcher immediately returns
+    /// without evaluating or executing any update strategy.
+    /// </summary>
+    [Fact]
+    public async Task DispatchAsyncWhenCallbackUserIsBannedReturnsEarlyWithoutExecutingStrategies()
+    {
+        // Arrange
+        const long bannedUserId = 88888;
+        var update = new Update
+        {
+            CallbackQuery = new CallbackQuery
+            {
+                From = new User { Id = bannedUserId },
+            },
+        };
+
+        _bannedUserServiceSubstitute.IsBannedAsync(bannedUserId, Arg.Any<CancellationToken>()).Returns(true);
+
+        var strategy = Substitute.For<ITelegramUpdateStrategy>();
+        var dispatcher = new TelegramUpdateDispatcher(_optionsSubstitute, [strategy], _defaultStrategySubstitute, _bannedUserServiceSubstitute);
+
+        // Act
+        await dispatcher.DispatchAsync(update, TestContext.Current.CancellationToken);
+
+        // Assert
+        await strategy.DidNotReceiveWithAnyArgs().CanHandleAsync(default, TestContext.Current.CancellationToken);
+        await strategy.DidNotReceiveWithAnyArgs().HandleAsync(default, TestContext.Current.CancellationToken);
+        await _defaultStrategySubstitute.DidNotReceiveWithAnyArgs().HandleAsync(default, TestContext.Current.CancellationToken);
     }
 }

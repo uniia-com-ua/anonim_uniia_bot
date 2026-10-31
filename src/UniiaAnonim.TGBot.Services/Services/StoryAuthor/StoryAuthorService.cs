@@ -1,4 +1,6 @@
-﻿using UniiaAnonim.TGBot.Application.Interfaces.Security;
+using System.Globalization;
+using Microsoft.Extensions.Caching.Memory;
+using UniiaAnonim.TGBot.Application.Interfaces.Security;
 using UniiaAnonim.TGBot.Application.Interfaces.StoryAuthor;
 using UniiaAnonim.TGBot.Domain.Interfaces.Repositories;
 using UniiaAnonim.TGBot.Shared.Dtos.StoryAuthor;
@@ -14,17 +16,29 @@ public sealed class StoryAuthorService(
     IStoryAuthorRepository storyAuthorRepository,
     IAuthorAgreementRepository authorAgreementRepository,
     ISymmetricEncryptionService symmetricEncryptionService,
-    IHashService hashService)
+    IHashService hashService,
+    IMemoryCache memoryCache)
     : IStoryAuthorService
 {
+    private static readonly TimeSpan AgreementCacheDuration = TimeSpan.FromHours(24);
+
     /// <inheritdoc />
     public async Task<TelegramMessageIds> GetAsync(Guid id, CancellationToken ct = default)
     {
         var story = await storyAuthorRepository.GetWithMessagesAsync(id, ct);
 
-        var mediaFiles = story.StoryMessages?
-            .Where(x => !string.IsNullOrEmpty(x.FileId))
-            .ToDictionary(x => x.FileId, x => x.Type);
+        Dictionary<string, StoryMediaType>? mediaFiles = null;
+        if (story.StoryMessages is { Count: > 0 })
+        {
+            mediaFiles = new Dictionary<string, StoryMediaType>(story.StoryMessages.Count);
+            foreach (var message in story.StoryMessages)
+            {
+                if (!string.IsNullOrEmpty(message.FileId))
+                {
+                    mediaFiles[message.FileId] = message.Type;
+                }
+            }
+        }
 
         return new TelegramMessageIds(
             story.ChannelMessageId,
@@ -34,7 +48,7 @@ public sealed class StoryAuthorService(
     /// <inheritdoc />
     public async Task<Guid> CreateAsync(long telegramId, CancellationToken ct = default)
     {
-        var stringId = telegramId.ToString();
+        var stringId = telegramId.ToString(CultureInfo.InvariantCulture);
 
         var storyAuthor = await storyAuthorRepository.CreateAsync(
             new()
@@ -57,17 +71,14 @@ public sealed class StoryAuthorService(
     /// <inheritdoc />
     public async Task<long> GetDecryptedTelegramIdAsync(Guid id, CancellationToken ct = default)
     {
-        var author = await storyAuthorRepository.GetAsync(id, ct);
+        var encryptedAuthorId = await storyAuthorRepository.GetEncryptedAuthorIdAsync(id, ct);
 
-        return long.Parse(symmetricEncryptionService.Decrypt(author.AuthorId));
+        return long.Parse(symmetricEncryptionService.Decrypt(encryptedAuthorId), CultureInfo.InvariantCulture);
     }
 
     /// <inheritdoc />
-    public async Task DeleteAsync(Guid id, CancellationToken ct = default)
-    {
-        await storyAuthorRepository.DeleteAsync(id, ct);
-        await storyAuthorRepository.SaveChangesAsync(ct);
-    }
+    public Task DeleteAsync(Guid id, CancellationToken ct = default)
+        => storyAuthorRepository.DeleteAsync(id, ct);
 
     /// <inheritdoc />
     public Task<int> GetActualStoryMessageIdAsync(long telegramId, CancellationToken ct = default)
@@ -82,23 +93,28 @@ public sealed class StoryAuthorService(
         => storyAuthorRepository.HasUserActiveStoryAsync(ComputeTelegramIdHash(telegramId), ct);
 
     /// <inheritdoc />
-    public Task<bool> HasAcceptedRulesAsync(long telegramId, CancellationToken ct = default)
-        => authorAgreementRepository.HasAcceptedRulesAsync(ComputeTelegramIdHash(telegramId), ct);
+    public async Task<bool> HasAcceptedRulesAsync(long telegramId, CancellationToken ct = default)
+    {
+        var cacheKey = GetRulesCacheKey(telegramId);
+        if (memoryCache.TryGetValue(cacheKey, out bool accepted) && accepted)
+        {
+            return true;
+        }
+
+        var hasAccepted = await authorAgreementRepository.HasAcceptedRulesAsync(ComputeTelegramIdHash(telegramId), ct);
+        if (hasAccepted)
+        {
+            memoryCache.Set(cacheKey, true, AgreementCacheDuration);
+        }
+
+        return hasAccepted;
+    }
 
     /// <inheritdoc />
     public async Task AcceptRulesAsync(long telegramId, CancellationToken ct = default)
     {
-        var authorIdHash = ComputeTelegramIdHash(telegramId);
-
-        await authorAgreementRepository.CreateAsync(
-            new()
-            {
-                AuthorIdHash = authorIdHash,
-                HasAcceptedRules = true,
-            },
-            ct);
-
-        await authorAgreementRepository.SaveChangesAsync(ct);
+        await authorAgreementRepository.AcceptRulesAsync(ComputeTelegramIdHash(telegramId), ct);
+        memoryCache.Set(GetRulesCacheKey(telegramId), true, AgreementCacheDuration);
     }
 
     /// <inheritdoc />
@@ -114,5 +130,7 @@ public sealed class StoryAuthorService(
         => storyAuthorRepository.SetStatusAsync(storyId, status, ct);
 
     private string ComputeTelegramIdHash(long telegramId) =>
-        hashService.ComputeHash(telegramId.ToString());
+        hashService.ComputeHash(telegramId.ToString(CultureInfo.InvariantCulture));
+
+    private static string GetRulesCacheKey(long telegramId) => $"rules_accepted_{telegramId}";
 }

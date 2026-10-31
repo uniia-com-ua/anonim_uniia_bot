@@ -1,9 +1,10 @@
-﻿using System.Threading.Channels;
+using System.Threading.Channels;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Telegram.Bot.Types;
 using UniiaAnonim.TGBot.Application.Interfaces.Telegram;
+using UniiaAnonim.TGBot.Shared.Consts;
 
 namespace UniiaAnonim.TGBot.Infrastructure.Services;
 
@@ -11,7 +12,7 @@ namespace UniiaAnonim.TGBot.Infrastructure.Services;
 /// A background service responsible for asynchronously processing incoming Telegram updates
 /// from an in-memory queue (Channel).
 /// </summary>
-public class UpdateProcessingBackgroundService(
+public partial class UpdateProcessingBackgroundService(
     Channel<Update> channel,
     IServiceProvider serviceProvider,
     ILogger<UpdateProcessingBackgroundService> logger) : BackgroundService
@@ -23,15 +24,25 @@ public class UpdateProcessingBackgroundService(
         {
             try
             {
-                using var scope = serviceProvider.CreateScope();
+                await using var scope = serviceProvider.CreateAsyncScope();
                 var dispatcher = scope.ServiceProvider.GetRequiredService<ITelegramUpdateDispatcher>();
 
                 await dispatcher.DispatchAsync(update, stoppingToken);
             }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                throw;
+            }
             catch (Exception ex)
             {
-                logger.LogError(ex, "An error occurred while processing update {UpdateId}", update.Id);
+                LogUpdateProcessingFailed(logger, ex, update.Id);
             }
         }
     }
+
+    [LoggerMessage(
+        EventId = LogEventIds.UpdateProcessingFailed,
+        Level = LogLevel.Error,
+        Message = "An error occurred while processing update {UpdateId}")]
+    private static partial void LogUpdateProcessingFailed(ILogger logger, Exception exception, int updateId);
 }

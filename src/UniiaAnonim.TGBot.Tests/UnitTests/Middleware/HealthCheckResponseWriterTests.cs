@@ -41,7 +41,7 @@ public class HealthCheckResponseWriterTests
 
         context.Response.Body.Position = 0;
         using var reader = new StreamReader(context.Response.Body);
-        var json = await reader.ReadToEndAsync();
+        var json = await reader.ReadToEndAsync(CancellationToken.None);
 
         using var document = JsonDocument.Parse(json);
         var root = document.RootElement;
@@ -92,7 +92,7 @@ public class HealthCheckResponseWriterTests
         // Assert
         context.Response.Body.Position = 0;
         using var reader = new StreamReader(context.Response.Body);
-        var json = await reader.ReadToEndAsync();
+        var json = await reader.ReadToEndAsync(CancellationToken.None);
 
         using var document = JsonDocument.Parse(json);
         var firstCheck = document.RootElement.GetProperty("checks")[0];

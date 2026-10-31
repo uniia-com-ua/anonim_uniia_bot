@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using UniiaAnonim.TGBot.Domain.Models;
 
@@ -23,9 +23,12 @@ public class StoryAuthorConfiguration : IEntityTypeConfiguration<StoryAuthor>
                .HasMaxLength(500);
 
         builder.HasIndex(x => x.AuthorIdHash);
+        builder.HasIndex(x => x.ChannelMessageId);
+        builder.HasIndex(x => new { x.AuthorIdHash, x.Status });
 
         builder.HasMany(x => x.StoryMessages)
-               .WithOne()
+               .WithOne(x => x.StoryAuthor)
+               .HasForeignKey(x => x.StoryId)
                .OnDelete(DeleteBehavior.Cascade);
     }
 }

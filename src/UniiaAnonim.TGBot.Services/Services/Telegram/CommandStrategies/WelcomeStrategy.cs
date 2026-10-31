@@ -1,10 +1,11 @@
-﻿using Microsoft.Extensions.Localization;
+using Microsoft.Extensions.Localization;
 using Telegram.Bot;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
 using Telegram.Bot.Types.ReplyMarkups;
 using UniiaAnonim.TGBot.Application.Interfaces.Telegram;
 using UniiaAnonim.TGBot.Shared.Consts;
+using UniiaAnonim.TGBot.Shared.Extensions;
 using UniiaAnonim.TGBot.Shared.Resources;
 
 namespace UniiaAnonim.TGBot.Application.Services.Telegram.CommandStrategies;
@@ -29,17 +30,18 @@ public sealed class WelcomeStrategy(
     /// <inheritdoc/>
     public async Task HandleAsync(Update update, CancellationToken ct = default)
     {
-        if (update.Message is null)
+        if (update.Message is not { Chat: not null } message)
         {
             return;
         }
 
-        var inlineKeyboard = new InlineKeyboardMarkup(
-            InlineKeyboardButton.WithCallbackData(localizer["str0032"], ButtonPrefixes.AcceptRulesPrefix));
+        var inlineKeyboard = new InlineKeyboardMarkup([
+            [InlineKeyboardButton.WithCallbackData(localizer["str0032"], ButtonPrefixes.AcceptRulesPrefix)]
+        ]);
 
         await botClient.SendMessage(
-            chatId: update.Message.Chat.Id,
-            text: localizer["str0002"],
+            chatId: message.Chat.Id,
+            text: localizer["str0002"].UnescapedValue(),
             parseMode: ParseMode.Html,
             replyMarkup: inlineKeyboard,
             cancellationToken: ct);

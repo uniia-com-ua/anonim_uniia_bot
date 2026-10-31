@@ -1,7 +1,10 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 
 namespace UniiaAnonim.TGBot.Infrastructure.Persistence;
 
+/// <summary>
+/// Entity Framework database context for the application.
+/// </summary>
 public class AppDbContext(DbContextOptions<AppDbContext> options)
     : DbContext(options)
 {

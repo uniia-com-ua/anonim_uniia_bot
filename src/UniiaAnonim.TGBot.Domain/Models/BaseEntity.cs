@@ -1,4 +1,4 @@
-﻿namespace UniiaAnonim.TGBot.Domain.Models;
+namespace UniiaAnonim.TGBot.Domain.Models;
 
 /// <summary>
 /// Serves as the abstract base class for domain entities, providing a unique identifier.
@@ -7,7 +7,7 @@ public abstract class BaseEntity
 {
     protected BaseEntity()
     {
-        Id = Guid.NewGuid();
+        Id = Guid.CreateVersion7();
     }
 
     protected BaseEntity(Guid id)

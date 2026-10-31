@@ -1,4 +1,5 @@
-﻿using System.Security.Cryptography;
+using System.Buffers;
+using System.Security.Cryptography;
 using System.Text;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
@@ -17,6 +18,8 @@ public sealed class TelegramSecretTokenFilter(IOptions<TelegramBotOptions> optio
 {
     private const string SecretTokenHeaderName = "X-Telegram-Bot-Api-Secret-Token";
 
+    private readonly byte[] _expectedTokenBytes = Encoding.UTF8.GetBytes(options.Value.SecretToken ?? string.Empty);
+
     /// <summary>
     /// Executes asynchronously before the action method is invoked.
     /// Validates the "X-Telegram-Bot-Api-Secret-Token" header against the configured expected token.
@@ -24,30 +27,45 @@ public sealed class TelegramSecretTokenFilter(IOptions<TelegramBotOptions> optio
     /// <param name="context">The context for the executing action.</param>
     /// <param name="next">The delegate to execute the next filter or the action itself.</param>
     /// <returns>A task that represents the asynchronous filter execution.</returns>
-    public async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
+    public Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
     {
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(next);
 
-        var expectedToken = options.Value.SecretToken;
-
-        if (!context.HttpContext.Request.Headers.TryGetValue(SecretTokenHeaderName, out var tokenValue) ||
-            string.IsNullOrEmpty(expectedToken) ||
-            !IsValidToken(tokenValue!, expectedToken))
+        if (_expectedTokenBytes.Length == 0 ||
+            !context.HttpContext.Request.Headers.TryGetValue(SecretTokenHeaderName, out var tokenValue) ||
+            string.IsNullOrEmpty(tokenValue) ||
+            !IsValidToken(tokenValue!))
         {
             context.Result = new ObjectResult("Forbidden") { StatusCode = StatusCodes.Status403Forbidden };
-            return;
+            return Task.CompletedTask;
         }
 
-        await next();
+        return next();
     }
 
-    private static bool IsValidToken(string providedToken, string expectedToken)
+    private bool IsValidToken(string providedToken)
     {
-        var providedBytes = Encoding.UTF8.GetBytes(providedToken);
-        var expectedBytes = Encoding.UTF8.GetBytes(expectedToken);
+        int maxBytes = Encoding.UTF8.GetMaxByteCount(providedToken.Length);
+        if (maxBytes <= 256)
+        {
+            Span<byte> providedBytes = stackalloc byte[maxBytes];
+            int written = Encoding.UTF8.GetBytes(providedToken, providedBytes);
 
-        return providedBytes.Length == expectedBytes.Length &&
-               CryptographicOperations.FixedTimeEquals(providedBytes, expectedBytes);
+            return written == _expectedTokenBytes.Length &&
+                   CryptographicOperations.FixedTimeEquals(providedBytes[..written], _expectedTokenBytes);
+        }
+
+        byte[] rented = ArrayPool<byte>.Shared.Rent(maxBytes);
+        try
+        {
+            int written = Encoding.UTF8.GetBytes(providedToken, rented);
+            return written == _expectedTokenBytes.Length &&
+                   CryptographicOperations.FixedTimeEquals(rented.AsSpan(0, written), _expectedTokenBytes);
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(rented);
+        }
     }
 }

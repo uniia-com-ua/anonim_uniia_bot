@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -17,8 +17,9 @@ namespace UniiaAnonim.TGBot.Infrastructure.Services.Telegram;
 /// </summary>
 /// <param name="botClient">The Telegram bot client used to interact with the Telegram API.</param>
 /// <param name="localizer">The localizer used to retrieve translated command descriptions.</param>
+/// <param name="generalOptions">The general configuration options.</param>
 /// <param name="logger">The logger used to record configuration status and errors.</param>
-public class TelegramCommandsInitializer(
+public sealed partial class TelegramCommandsInitializer(
     ITelegramBotClient botClient,
     IStringLocalizer<Messages> localizer,
     IOptions<GeneralOptions> generalOptions,
@@ -26,29 +27,49 @@ public class TelegramCommandsInitializer(
 {
     public async Task StartAsync(CancellationToken cancellationToken)
     {
-        logger.LogInformation("Setting up global Telegram bot commands...");
+        ArgumentNullException.ThrowIfNull(logger);
+
+        LogSettingUpGlobalBotCommands(logger);
 
         try
         {
             using var scope = new CultureScope(generalOptions.Value.DefaultLanguage ?? ApplicationConsts.DefaultLanguage);
 
             await botClient.SetMyCommands(
-            commands: [.. TelegramBotCommands.GroupChatsCommands.Select(c => new BotCommand(c.Command, localizer[c.DescriptionKey]))],
-            scope: BotCommandScope.AllGroupChats(),
-            cancellationToken: cancellationToken);
+                commands: [.. TelegramBotCommands.GroupChatsCommands.Select(c => new BotCommand(c.Command, localizer[c.DescriptionKey]))],
+                scope: BotCommandScope.AllGroupChats(),
+                cancellationToken: cancellationToken);
 
             await botClient.SetMyCommands(
                 commands: [.. TelegramBotCommands.UsersCommands.Select(c => new BotCommand(c.Command, localizer[c.DescriptionKey]))],
                 scope: BotCommandScope.AllPrivateChats(),
                 cancellationToken: cancellationToken);
 
-            logger.LogInformation("Successfully configured global bot commands with localization.");
+            LogGlobalBotCommandsConfiguredSuccessfully(logger);
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Failed to set global bot commands on startup.");
+            LogFailedToSetGlobalBotCommands(logger, ex);
         }
     }
 
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+    [LoggerMessage(
+        EventId = LogEventIds.SettingUpGlobalBotCommands,
+        Level = LogLevel.Information,
+        Message = "Setting up global Telegram bot commands...")]
+    private static partial void LogSettingUpGlobalBotCommands(ILogger logger);
+
+    [LoggerMessage(
+        EventId = LogEventIds.GlobalBotCommandsConfiguredSuccessfully,
+        Level = LogLevel.Information,
+        Message = "Successfully configured global bot commands with localization.")]
+    private static partial void LogGlobalBotCommandsConfiguredSuccessfully(ILogger logger);
+
+    [LoggerMessage(
+        EventId = LogEventIds.FailedToSetGlobalBotCommands,
+        Level = LogLevel.Error,
+        Message = "Failed to set global bot commands on startup.")]
+    private static partial void LogFailedToSetGlobalBotCommands(ILogger logger, Exception exception);
 }

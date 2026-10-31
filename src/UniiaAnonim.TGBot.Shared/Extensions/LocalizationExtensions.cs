@@ -1,4 +1,5 @@
-﻿using System.Text.RegularExpressions;
+using System.Text;
+using System.Text.RegularExpressions;
 using Microsoft.Extensions.Localization;
 
 namespace UniiaAnonim.TGBot.Shared.Extensions;
@@ -10,31 +11,70 @@ namespace UniiaAnonim.TGBot.Shared.Extensions;
 public static class LocalizationExtensions
 {
     /// <summary>
-    /// Converts escaped character sequences (like "\\n", "\\r", "\\t") in a string
-    /// back into their actual character representations (like "\n", "\r", "\t").
+    /// Converts escaped character sequences (like "\\n", "\\r", "\\t", "\\\"", "\\'") in a string
+    /// back into their actual character representations in a single high-performance pass.
+    /// Uses a zero-allocation fast-path when no backslash character is detected.
     /// </summary>
     /// <param name="text">The string containing potentially double-escaped characters.</param>
     /// <returns>A string with properly rendered control characters.</returns>
-    /// <example>
-    /// <code>
-    /// string input = "Line one\\nLine two";
-    /// string result = input.Unescape(); // "Line one\nLine two"
-    /// </code>
-    /// </example>
     public static string Unescape(this string text)
     {
-        return string.IsNullOrEmpty(text)
-            ? text
-            : text
-            .Replace("\\n", "\n")
-            .Replace("\\r", "\r")
-            .Replace("\\t", "\t")
-            .Replace("\\\"", "\"")
-            .Replace("\\'", "'");
+        if (string.IsNullOrEmpty(text))
+        {
+            return text;
+        }
+
+        int firstBackslash = text.IndexOf('\\');
+        if (firstBackslash < 0)
+        {
+            return text;
+        }
+
+        var sb = new StringBuilder(text.Length);
+        sb.Append(text.AsSpan(0, firstBackslash));
+
+        for (int i = firstBackslash; i < text.Length; i++)
+        {
+            char c = text[i];
+            if (c == '\\' && i + 1 < text.Length)
+            {
+                char next = text[i + 1];
+                switch (next)
+                {
+                    case 'n':
+                        sb.Append('\n');
+                        i++;
+                        continue;
+                    case 'r':
+                        sb.Append('\r');
+                        i++;
+                        continue;
+                    case 't':
+                        sb.Append('\t');
+                        i++;
+                        continue;
+                    case '"':
+                        sb.Append('"');
+                        i++;
+                        continue;
+                    case '\'':
+                        sb.Append('\'');
+                        i++;
+                        continue;
+                    default:
+                        sb.Append('\\');
+                        continue;
+                }
+            }
+
+            sb.Append(c);
+        }
+
+        return sb.ToString();
     }
 
     /// <summary>
-    /// A more robust version of <see cref="Unescape"/> using Regex,
+    /// A version of <see cref="Unescape"/> using Regex,
     /// which handles all standard C# escape sequences dynamically.
     /// </summary>
     /// <param name="text">The string to unescape.</param>

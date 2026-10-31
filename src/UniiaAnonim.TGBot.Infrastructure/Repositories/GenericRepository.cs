@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using UniiaAnonim.TGBot.Domain.Interfaces.Repositories;
 using UniiaAnonim.TGBot.Domain.Models;
 using UniiaAnonim.TGBot.Shared.Exceptions;
@@ -29,10 +29,10 @@ public class GenericRepository<T>(DbContext context)
     /// <param name="entity">The entity to create.</param>
     /// <param name="ct">A token to monitor for cancellation requests.</param>
     /// <returns>A task representing the asynchronous operation. The task result contains the newly created entity.</returns>
-    public async Task<T> CreateAsync(T entity, CancellationToken ct = default)
+    public Task<T> CreateAsync(T entity, CancellationToken ct = default)
     {
-        var entry = await DbSet.AddAsync(entity, ct);
-        return entry.Entity;
+        var entry = DbSet.Add(entity);
+        return Task.FromResult(entry.Entity);
     }
 
     /// <summary>
@@ -44,10 +44,11 @@ public class GenericRepository<T>(DbContext context)
     /// <exception cref="EntityNotFoundException">Thrown if the entity with the specified ID is not found.</exception>
     public async Task DeleteAsync(Guid id, CancellationToken ct = default)
     {
-        var model = await DbSet.FirstOrDefaultAsync(x => x.Id == id, ct)
-            ?? throw new EntityNotFoundException(typeof(T).Name, id);
-
-        DbSet.Remove(model);
+        var rowsDeleted = await DbSet.Where(x => x.Id == id).ExecuteDeleteAsync(ct);
+        if (rowsDeleted == 0)
+        {
+            throw new EntityNotFoundException(typeof(T).Name, id);
+        }
     }
 
     /// <summary>
@@ -59,53 +60,8 @@ public class GenericRepository<T>(DbContext context)
     /// <exception cref="EntityNotFoundException">Thrown if the entity with the specified ID is not found.</exception>
     public async Task<T> GetAsync(Guid id, CancellationToken ct = default)
     {
-        return await DbSet
-            .AsNoTracking()
-            .FirstOrDefaultAsync(x => x.Id == id, ct)
+        return await DbSet.FindAsync([id], ct)
             ?? throw new EntityNotFoundException(typeof(T).Name, id);
-    }
-
-    /// <summary>
-    /// Asynchronously checks if an entity with the specified unique identifier exists.
-    /// Throws an exception if the entity is not found.
-    /// </summary>
-    /// <param name="id">The unique identifier of the entity to check.</param>
-    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
-    /// <returns>A task representing the asynchronous operation.</returns>
-    /// <exception cref="EntityNotFoundException">Thrown if no entity with the specified ID exists.</exception>
-    public async Task EnsureExistsAsync(Guid id, CancellationToken cancellationToken = default)
-    {
-        bool exists = await DbSet
-            .AsNoTracking()
-            .AnyAsync(m => m.Id == id, cancellationToken);
-
-        if (!exists)
-        {
-            throw new EntityNotFoundException(typeof(T).Name, id);
-        }
-    }
-
-    /// <summary>
-    /// Asynchronously retrieves all entities of type <typeparamref name="T"/>.
-    /// </summary>
-    /// <param name="ct">A token to monitor for cancellation requests.</param>
-    /// <returns>A list of all entities.</returns>
-    public async Task<List<T>> GetListAsync(CancellationToken ct = default)
-        => await DbSet.ToListAsync(ct);
-
-    /// <summary>
-    /// Asynchronously updates an existing entity in the data store.
-    /// </summary>
-    /// <param name="entity">
-    /// The entity instance containing updated values.
-    /// The entity must already exist in the data store.
-    /// </param>
-    /// <param name="ct">A token to monitor for cancellation requests.</param>
-    /// <returns>A task that represents the asynchronous operation. The task result contains the updated entity.</returns>
-    public Task<T> UpdateAsync(T entity, CancellationToken ct = default)
-    {
-        var entry = DbSet.Update(entity);
-        return Task.FromResult(entry.Entity);
     }
 
     /// <summary>

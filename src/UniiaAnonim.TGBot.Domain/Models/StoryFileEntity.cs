@@ -1,4 +1,4 @@
-﻿using UniiaAnonim.TGBot.Shared.Enums;
+using UniiaAnonim.TGBot.Shared.Enums;
 
 namespace UniiaAnonim.TGBot.Domain.Models;
 
@@ -15,7 +15,7 @@ public class StoryFileEntity
     /// <summary>
     /// Gets or sets the Telegram file ID associated with this story.
     /// </summary>
-    public string FileId { get; set; }
+    public string FileId { get; set; } = string.Empty;
 
     /// <summary>
     /// Gets or sets the type of the media file (e.g., Photo, Video).
@@ -25,5 +25,5 @@ public class StoryFileEntity
     /// <summary>
     /// Gets or sets the associated story author entity.
     /// </summary>
-    public StoryAuthor StoryAuthor { get; set; }
+    public StoryAuthor StoryAuthor { get; set; } = null!;
 }

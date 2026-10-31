@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using UniiaAnonim.TGBot.Domain.Interfaces.Repositories;
 using UniiaAnonim.TGBot.Domain.Models;
 using UniiaAnonim.TGBot.Infrastructure.Persistence;
@@ -9,7 +9,7 @@ namespace UniiaAnonim.TGBot.Infrastructure.Repositories;
 /// Provides repository implementation for managing <see cref="AuthorAgreement"/> entities.
 /// </summary>
 /// <param name="appDbContext">The application database context.</param>
-public class AuthorAgreementRepository(
+public sealed class AuthorAgreementRepository(
     AppDbContext appDbContext)
     : GenericRepository<AuthorAgreement>(appDbContext),
     IAuthorAgreementRepository
@@ -26,4 +26,26 @@ public class AuthorAgreementRepository(
         => await DbSet
                 .AsNoTracking()
                 .AnyAsync(x => x.AuthorIdHash == authorIdHash && x.HasAcceptedRules, ct);
+
+    /// <inheritdoc/>
+    public async Task AcceptRulesAsync(string authorIdHash, CancellationToken ct = default)
+    {
+        var existing = await DbSet.FirstOrDefaultAsync(x => x.AuthorIdHash == authorIdHash, ct);
+        if (existing is null)
+        {
+            var newAgreement = new AuthorAgreement
+            {
+                AuthorIdHash = authorIdHash,
+                HasAcceptedRules = true,
+            };
+
+            DbSet.Add(newAgreement);
+            await Context.SaveChangesAsync(ct);
+        }
+        else if (!existing.HasAcceptedRules)
+        {
+            existing.HasAcceptedRules = true;
+            await Context.SaveChangesAsync(ct);
+        }
+    }
 }

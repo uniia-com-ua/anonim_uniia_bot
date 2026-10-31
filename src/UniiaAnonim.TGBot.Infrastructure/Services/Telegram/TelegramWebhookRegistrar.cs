@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Options;
 using Telegram.Bot;
 using UniiaAnonim.TGBot.Application.Interfaces.Telegram;
 using UniiaAnonim.TGBot.Shared.Configuration;
@@ -14,7 +14,7 @@ namespace UniiaAnonim.TGBot.Infrastructure.Services.Telegram;
 /// <param name="botClient">The Telegram bot client used to interact with the Telegram API.</param>
 /// <param name="generalOptions">The application's general configuration, providing the base URL for the webhook.</param>
 /// <param name="telegramOptions">The configured Telegram options containing the secret token for webhook validation.</param>
-public class TelegramWebhookRegistrar(
+public sealed class TelegramWebhookRegistrar(
     ITelegramBotClient botClient,
     IOptions<GeneralOptions> generalOptions,
     IOptions<TelegramBotOptions> telegramOptions) : IWebhookRegistrar

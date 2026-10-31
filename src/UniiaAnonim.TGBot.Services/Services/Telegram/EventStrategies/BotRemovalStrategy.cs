@@ -1,8 +1,9 @@
-﻿using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
 using UniiaAnonim.TGBot.Application.Interfaces.Telegram;
 using UniiaAnonim.TGBot.Domain.Interfaces.Repositories;
+using UniiaAnonim.TGBot.Shared.Consts;
 
 namespace UniiaAnonim.TGBot.Application.Services.Telegram.EventStrategies;
 
@@ -10,7 +11,7 @@ namespace UniiaAnonim.TGBot.Application.Services.Telegram.EventStrategies;
 /// Defines a strategy for handling the my_chat_member update.
 /// Removes the chat (group or channel) from the database when the bot is removed or leaves.
 /// </summary>
-public sealed class BotRemovalStrategy(
+public sealed partial class BotRemovalStrategy(
     IChannelRepository channelRepository,
     ILogger<BotRemovalStrategy> logger)
     : ITelegramUpdateStrategy
@@ -28,13 +29,16 @@ public sealed class BotRemovalStrategy(
     {
         var chat = update.MyChatMember.Chat;
 
-        if (!await channelRepository.ExistsAsync(chat.Id, ct))
+        var deleted = await channelRepository.DeleteByChannelIdAsync(chat.Id, ct);
+        if (!deleted)
         {
-            logger.LogWarning("Channel with ID {ChannelId} does not exist in the database. Skipping removal.", chat.Id);
-            return;
+            LogChannelNotFoundForRemoval(logger, chat.Id);
         }
-
-        await channelRepository.DeleteByChannelIdAsync(chat.Id, ct);
-        await channelRepository.SaveChangesAsync(ct);
     }
+
+    [LoggerMessage(
+        EventId = LogEventIds.ChannelNotFoundForRemoval,
+        Level = LogLevel.Warning,
+        Message = "Channel with ID {ChannelId} does not exist in the database. Skipping removal.")]
+    private static partial void LogChannelNotFoundForRemoval(ILogger logger, long channelId);
 }

@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.Localization;
+using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Logging;
 using Telegram.Bot;
 using Telegram.Bot.Types;
@@ -14,7 +14,7 @@ namespace UniiaAnonim.TGBot.Application.Services.Telegram.EventStrategies;
 /// Defines a strategy for handling the edit story callback query.
 /// Prompts the administrator to reply with the edited text for the story.
 /// </summary>
-public sealed class EditStoryCallbackStrategy(
+public sealed partial class EditStoryCallbackStrategy(
     ITelegramBotClient botClient,
     IStringLocalizer<Messages> localizer,
     ILogger<EditStoryCallbackStrategy> logger)
@@ -35,7 +35,7 @@ public sealed class EditStoryCallbackStrategy(
 
         if (callbackQuery.Message is null)
         {
-            logger.LogWarning("Callback query {CallbackQueryId} is missing message context.", callbackQuery.Id);
+            LogCallbackQueryMissingMessageContext(logger, callbackQuery.Id);
             return;
         }
 
@@ -43,7 +43,8 @@ public sealed class EditStoryCallbackStrategy(
 
         if (!Guid.TryParse(storyIdString, out var storyId))
         {
-            logger.LogWarning("Invalid story ID format in callback data: {CallbackData}", callbackQuery.Data);
+            LogInvalidStoryIdFormat(logger, callbackQuery.Data);
+            await botClient.AnswerCallbackQuery(callbackQuery.Id, cancellationToken: ct);
             return;
         }
 
@@ -55,4 +56,16 @@ public sealed class EditStoryCallbackStrategy(
 
         await botClient.AnswerCallbackQuery(callbackQuery.Id, cancellationToken: ct);
     }
+
+    [LoggerMessage(
+        EventId = LogEventIds.CallbackQueryMissingMessageContext,
+        Level = LogLevel.Warning,
+        Message = "Callback query {CallbackQueryId} is missing message context.")]
+    private static partial void LogCallbackQueryMissingMessageContext(ILogger logger, string callbackQueryId);
+
+    [LoggerMessage(
+        EventId = LogEventIds.InvalidStoryIdFormat,
+        Level = LogLevel.Warning,
+        Message = "Invalid story ID format in callback data: {CallbackData}")]
+    private static partial void LogInvalidStoryIdFormat(ILogger logger, string? callbackData);
 }

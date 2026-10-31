@@ -1,5 +1,4 @@
-﻿using UniiaAnonim.TGBot.Domain.Models;
-using UniiaAnonim.TGBot.Shared.Exceptions;
+using UniiaAnonim.TGBot.Domain.Models;
 
 namespace UniiaAnonim.TGBot.Domain.Interfaces.Repositories;
 
@@ -20,37 +19,12 @@ public interface IGenericRepository<T>
     Task<T> GetAsync(Guid id, CancellationToken ct = default);
 
     /// <summary>
-    /// Asynchronously checks if an entity with the specified unique identifier exists.
-    /// Throws an exception if the entity is not found.
-    /// </summary>
-    /// <param name="id">The unique identifier of the entity to check.</param>
-    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
-    /// <returns>A task representing the asynchronous operation.</returns>
-    /// <exception cref="EntityNotFoundException">Thrown if no entity with the specified ID exists.</exception>
-    Task EnsureExistsAsync(Guid id, CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Asynchronously retrieves a complete list of entities of type <typeparamref name="T"/>.
-    /// </summary>
-    /// <param name="ct">A cancellation token that can be used to cancel the underlying operation.</param>
-    /// <returns>A task that represents the asynchronous operation. The task result contains a list of entities.</returns>
-    Task<List<T>> GetListAsync(CancellationToken ct = default);
-
-    /// <summary>
     /// Asynchronously creates a new entity in the underlying data store.
     /// </summary>
     /// <param name="entity">The entity to create.</param>
     /// <param name="ct">A cancellation token that can be used to cancel the underlying operation.</param>
     /// <returns>A task that represents the asynchronous operation. The task result contains the newly created entity.</returns>
     Task<T> CreateAsync(T entity, CancellationToken ct = default);
-
-    /// <summary>
-    /// Asynchronously updates an existing entity in the underlying data store.
-    /// </summary>
-    /// <param name="entity">The entity containing the updated data.</param>
-    /// <param name="ct">A cancellation token that can be used to cancel the underlying operation.</param>
-    /// <returns>A task that represents the asynchronous operation. The task result contains the updated entity.</returns>
-    Task<T> UpdateAsync(T entity, CancellationToken ct = default);
 
     /// <summary>
     /// Asynchronously deletes an entity from the underlying data store by its unique identifier.
